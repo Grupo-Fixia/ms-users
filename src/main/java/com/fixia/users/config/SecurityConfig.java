@@ -35,6 +35,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST,
                                 "/api/users/clients",
+                                "/api/users/technicians",
                                 "/api/users/auth/login",
                                 "/api/users/auth/refresh").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
