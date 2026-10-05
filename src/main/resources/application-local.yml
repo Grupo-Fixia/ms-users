@@ -1,0 +1,8 @@
+# Perfil solo para desarrollo sin Docker: base H2 en memoria con las mismas migraciones de Flyway.
+# Arranque: mvn spring-boot:run -Dspring-boot.run.useTestClasspath=true -Dspring-boot.run.profiles=local
+spring:
+  datasource:
+    url: jdbc:h2:mem:users;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
