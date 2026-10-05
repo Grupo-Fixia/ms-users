@@ -37,4 +37,12 @@ class SensitiveDataToStringTest {
 
         assertThat(request.toString()).doesNotContain("Clave1234");
     }
+
+    @Test
+    void elRegistroDeTecnicoNoImprimeLaContrasena() {
+        TechnicianRegistrationRequest request = new TechnicianRegistrationRequest("Carlos", "Gómez", DocumentType.CC,
+                "456", "carlos@example.com", "3104445566", "Tecnico123", "v1.0", true);
+
+        assertThat(request.toString()).contains("carlos@example.com").doesNotContain("Tecnico123");
+    }
 }
