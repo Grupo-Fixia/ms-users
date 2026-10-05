@@ -3,7 +3,7 @@ info:
   title: ms-users
   version: 0.0.1
   description: |
-    Registro de clientes, inicio y cierre de sesión (GC-234 / GC-236).
+    Registro de clientes y técnicos, inicio y cierre de sesión (GC-234 / GC-235 / GC-236).
 
     Los errores usan RFC 7807 (`application/problem+json`). Todas las respuestas 401 son idénticas
     (cabecera `WWW-Authenticate: Bearer` y el mismo cuerpo) para no revelar el motivo del rechazo.
@@ -39,6 +39,35 @@ paths:
           $ref: '#/components/responses/ValidationError'
         '409':
           description: Ya existe una cuenta con ese correo o ese documento.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/users/technicians:
+    post:
+      summary: Registrar cuenta de técnico (GC-254)
+      description: |
+        Mismos datos y validaciones que el registro de cliente. Crea la cuenta con rol PROFESSIONAL y, en la
+        misma transacción, su perfil de técnico con verificación PENDING y sin información profesional.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianRegistrationRequest'
+      responses:
+        '201':
+          description: Cuenta creada con rol PROFESSIONAL. La respuesta nunca incluye la contraseña ni su hash.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianRegistrationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Ya existe una cuenta (de cualquier rol) con ese correo o ese documento.
           content:
             application/problem+json:
               schema:
@@ -220,6 +249,28 @@ components:
         lastName: { type: string }
         role: { type: string, enum: [CLIENT, PROFESSIONAL, ADMIN] }
         createdAt: { type: string, format: date-time }
+
+    TechnicianRegistrationRequest:
+      allOf:
+        - $ref: '#/components/schemas/ClientRegistrationRequest'
+      description: Idéntico al registro de cliente.
+
+    TechnicianRegistrationResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid, description: Id de la cuenta (users). }
+        technicianId: { type: string, format: uuid, description: Id del perfil de técnico (technicians). }
+        email: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        role: { type: string, enum: [PROFESSIONAL] }
+        verificationStatus: { $ref: '#/components/schemas/VerificationStatus' }
+        createdAt: { type: string, format: date-time }
+
+    VerificationStatus:
+      type: string
+      enum: [PENDING, VALID, REJECTED, EXPIRED]
+      description: Lo custodia Verificación; al registrarse siempre es PENDING.
 
     LoginRequest:
       type: object
