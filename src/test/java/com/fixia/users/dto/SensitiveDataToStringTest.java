@@ -20,6 +20,11 @@ class SensitiveDataToStringTest {
     }
 
     @Test
+    void logoutNoImprimeElToken() {
+        assertThat(new LogoutRequest("token-secreto").toString()).doesNotContain("token-secreto");
+    }
+
+    @Test
     void laRespuestaDeTokensNoImprimeLosTokens() {
         assertThat(new TokenResponse("access-secreto", "refresh-secreto", "Bearer", 900).toString())
                 .doesNotContain("access-secreto").doesNotContain("refresh-secreto");

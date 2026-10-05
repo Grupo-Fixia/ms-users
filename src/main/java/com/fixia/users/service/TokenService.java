@@ -49,6 +49,14 @@ public class TokenService {
         this.clock = clock;
     }
 
+    /** Extrae el id de usuario del claim "sub" (usr_<uuid>). Lanza IllegalArgumentException si no tiene ese formato. */
+    public static UUID parseUserId(String subject) {
+        if (subject == null || !subject.startsWith(SUBJECT_PREFIX)) {
+            throw new IllegalArgumentException("Subject con formato inválido");
+        }
+        return UUID.fromString(subject.substring(SUBJECT_PREFIX.length()));
+    }
+
     @Transactional
     public TokenResponse issueTokens(User user) {
         Instant now = clock.instant();

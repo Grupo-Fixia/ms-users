@@ -40,7 +40,7 @@ public class MeController {
 
     private static UUID parseUserId(String subject) {
         try {
-            return UUID.fromString(subject.substring(TokenService.SUBJECT_PREFIX.length()));
+            return TokenService.parseUserId(subject);
         } catch (RuntimeException e) {
             throw sessionNoLongerValid();
         }

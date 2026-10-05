@@ -17,8 +17,15 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
     /**
      * Revoca el token solo si sigue activo. La condición atómica garantiza que un refresh token
      * sea de un solo uso aunque lleguen dos solicitudes simultáneas; devuelve 0 si ya estaba revocado.
+     * <p>
+     * {@code flushAutomatically} es imprescindible junto a {@code clearAutomatically}: sin él, los cambios
+     * pendientes de la misma transacción (por ejemplo, un token revocado por logout) se descartan sin guardarse.
      */
-    @Modifying(clearAutomatically = true)
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query("update RefreshToken t set t.revokedAt = :now where t.id = :id and t.revokedAt is null")
     int revokeIfActive(@Param("id") UUID id, @Param("now") Instant now);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from RefreshToken t where t.expiresAt < :now")
+    int deleteExpired(@Param("now") Instant now);
 }
