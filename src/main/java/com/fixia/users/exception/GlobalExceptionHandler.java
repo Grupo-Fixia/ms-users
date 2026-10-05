@@ -42,6 +42,20 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ProblemDetail handleInvalidCredentials(InvalidCredentialsException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        problem.setTitle("No autenticado");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    public ProblemDetail handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        problem.setTitle("No autenticado");
+        return problem;
+    }
+
     @ExceptionHandler({AccountAlreadyExistsException.class, DataIntegrityViolationException.class})
     public ProblemDetail handleConflict(RuntimeException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(

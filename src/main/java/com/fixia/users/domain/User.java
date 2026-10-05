@@ -79,6 +79,10 @@ public class User {
         this.createdAt = now;
     }
 
+    public void disable() {
+        this.status = UserStatus.DISABLED;
+    }
+
     public UUID getId() {
         return id;
     }

@@ -21,6 +21,17 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+fixia:
+  jwt:
+    issuer: ${JWT_ISSUER:https://auth.fixia.com}
+    audience: ${JWT_AUDIENCE:https://api.fixia.com}
+    # Tiempos de vida no definidos en el SRS: valores por defecto ajustables por entorno.
+    access-token-ttl: ${JWT_ACCESS_TTL:15m}
+    refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
+    # PEM (PKCS#8 la privada, X.509 la pública). Obligatorias fuera de los perfiles local y test.
+    private-key: ${JWT_PRIVATE_KEY:}
+    public-key: ${JWT_PUBLIC_KEY:}
+
 management:
   endpoints:
     web:
