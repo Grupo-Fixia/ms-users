@@ -57,4 +57,7 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
 - `POST /api/users/technicians` crea la cuenta con rol `PROFESSIONAL` y su fila en `technicians` (verificación `PENDING`)
   en la misma transacción. Pide los mismos datos y el mismo consentimiento que el registro de cliente.
 - Persistencia relacional (PostgreSQL), según el DD V2: `technicians` es la tabla TECNICO (especialización 1:1 de
-  `users`). Este servicio no usa MongoDB: el DD no le asigna ninguna colección.
+  `users`) y `technician_categories` es TECNICO_CATEGORIA. Este servicio no usa MongoDB: el DD no le asigna ninguna
+  colección.
+- Perfil profesional (RF-009): descripción, años de experiencia y categorías (`PLUMBING`, `ELECTRICAL`,
+  `MAINTENANCE`, `LOCKSMITHING`, `PAINTING`, `CARPENTRY`). Un técnico no puede repetir una categoría.
