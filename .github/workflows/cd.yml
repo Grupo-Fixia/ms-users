@@ -3,7 +3,7 @@ on:
   workflow_run:
     workflows: ["ci"]
     types: [completed]
-    branches: [develop]
+    branches: [Qa]
 
 permissions:
   contents: read
