@@ -39,8 +39,9 @@ class RefreshTokenRepositoryTest {
         String uniqueSuffix = java.util.UUID.randomUUID().toString().substring(0, 8);
         User user = userRepository.save(new User("ana-" + uniqueSuffix + "@example.com", "hash", Role.CLIENT, "Ana", "Pérez",
                 DocumentType.CC, "123-" + uniqueSuffix, "300" + uniqueSuffix, "v1.0", now));
+        String randomHash1 = (java.util.UUID.randomUUID().toString().replace("-", "") + "a".repeat(32)).substring(0, 64);
         RefreshToken token = refreshTokenRepository.save(
-                new RefreshToken(user.getId(), "a".repeat(64), now.plusSeconds(600), now));
+                new RefreshToken(user.getId(), randomHash1, now.plusSeconds(600), now));
 
         assertThat(refreshTokenRepository.revokeIfActive(token.getId(), now)).isEqualTo(1);
         assertThat(refreshTokenRepository.revokeIfActive(token.getId(), now)).isZero();
@@ -53,7 +54,8 @@ class RefreshTokenRepositoryTest {
         String uniqueSuffix = java.util.UUID.randomUUID().toString().substring(0, 8);
         User user = userRepository.save(new User("ana-" + uniqueSuffix + "@example.com", "hash", Role.CLIENT, "Ana", "Pérez",
                 DocumentType.CC, "123-" + uniqueSuffix, "300" + uniqueSuffix, "v1.0", now));
-        refreshTokenRepository.save(new RefreshToken(user.getId(), "b".repeat(64), now.plusSeconds(600), now));
+        String randomHash2 = (java.util.UUID.randomUUID().toString().replace("-", "") + "b".repeat(32)).substring(0, 64);
+        refreshTokenRepository.save(new RefreshToken(user.getId(), randomHash2, now.plusSeconds(600), now));
 
         userRepository.deleteAll();
         // Sin flush, Hibernate no envía el DELETE antes de contar: son tablas distintas.
