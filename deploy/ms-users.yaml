@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ms-users
+  namespace: apps
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: ms-users }
+  template:
+    metadata:
+      labels: { app: ms-users }
+    spec:
+      imagePullSecrets:
+        - name: ghcr-pull
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app: ms-users }
+      containers:
+        - name: ms-users
+          image: ${IMAGE}
+          ports:
+            - { name: http, containerPort: 8080 }
+          env:
+            - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres.data.svc.cluster.local:5432/ms_users" }
+            - { name: SPRING_DATASOURCE_USERNAME, value: "ms_users" }
+          envFrom:
+            - secretRef: { name: ms-users-secrets }
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 100m, memory: 512Mi }
+            limits: { memory: 768Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-users
+  namespace: apps
+spec:
+  selector: { app: ms-users }
+  ports:
+    - { name: http, port: 8080, targetPort: http }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ms-users
+  namespace: apps
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ms-users
+                port: { number: 8080 }
