@@ -56,6 +56,13 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(TechnicianProfileNotFoundException.class)
+    public ProblemDetail handleTechnicianProfileNotFound(TechnicianProfileNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Perfil no encontrado");
+        return problem;
+    }
+
     @ExceptionHandler({AccountAlreadyExistsException.class, DataIntegrityViolationException.class})
     public ProblemDetail handleConflict(RuntimeException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(

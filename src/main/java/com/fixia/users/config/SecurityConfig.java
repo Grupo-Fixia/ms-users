@@ -27,7 +27,8 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
-                                                   RestAuthenticationEntryPoint entryPoint) throws Exception {
+                                                   RestAuthenticationEntryPoint entryPoint,
+                                                   RestAccessDeniedHandler accessDeniedHandler) throws Exception {
         http
                 // API sin estado que autentica con Bearer token (no con cookies): CSRF no aplica.
                 .csrf(AbstractHttpConfigurer::disable)
@@ -35,15 +36,19 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST,
                                 "/api/users/clients",
+                                "/api/users/technicians",
                                 "/api/users/auth/login",
                                 "/api/users/auth/refresh").permitAll()
+                        .requestMatchers("/api/users/technicians/me/**").hasAuthority("ROLE_PROFESSIONAL")
                         .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                         .authenticationEntryPoint(entryPoint))
-                .exceptionHandling(ex -> ex.authenticationEntryPoint(entryPoint));
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(entryPoint)
+                        .accessDeniedHandler(accessDeniedHandler));
         return http.build();
     }
 

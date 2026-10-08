@@ -1,6 +1,7 @@
 # ms-users
 
-Registro de clientes, inicio y cierre de sesión (GC-234 / GC-236). Java 21, Spring Boot 3.2, PostgreSQL.
+Registro de clientes y técnicos, inicio y cierre de sesión, y perfil profesional del técnico
+(GC-234 / GC-235 / GC-236 / GC-237). Java 21, Spring Boot 3.2, PostgreSQL.
 
 Contrato de la API: [`docs/openapi.yaml`](docs/openapi.yaml).
 
@@ -50,3 +51,15 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
 - Access token JWT RS256 de vida corta. Un refresh token de un solo uso se guarda **solo como hash SHA-256**.
 - El cierre de sesión invalida el access token en el acto (lista de `jti` revocados) y revoca el refresh token.
 - Un job borra cada hora los tokens ya expirados.
+
+## Técnicos
+
+- `POST /api/users/technicians` crea la cuenta con rol `PROFESSIONAL` y su fila en `technicians` (verificación `PENDING`)
+  en la misma transacción. Pide los mismos datos y el mismo consentimiento que el registro de cliente.
+- `GET` / `PUT /api/users/technicians/me/profile` consultan y reemplazan la información profesional. Solo con rol
+  `PROFESSIONAL`; el técnico siempre sale del token, así que nadie puede tocar el perfil de otro. Un cliente recibe 403.
+- Persistencia relacional (PostgreSQL), según el DD V2: `technicians` es la tabla TECNICO (especialización 1:1 de
+  `users`) y `technician_categories` es TECNICO_CATEGORIA. Este servicio no usa MongoDB: el DD no le asigna ninguna
+  colección.
+- Perfil profesional (RF-009): descripción, años de experiencia y categorías (`PLUMBING`, `ELECTRICAL`,
+  `MAINTENANCE`, `LOCKSMITHING`, `PAINTING`, `CARPENTRY`). Un técnico no puede repetir una categoría.
