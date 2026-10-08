@@ -36,8 +36,9 @@ class RefreshTokenRepositoryTest {
     @Test
     void revocarEsAtomicoElSegundoIntentoNoRevocaNada() {
         Instant now = Instant.now();
-        User user = userRepository.save(new User("ana-" + java.util.UUID.randomUUID() + "@example.com", "hash", Role.CLIENT, "Ana", "Pérez",
-                DocumentType.CC, "123", "3001112233", "v1.0", now));
+        String uniqueSuffix = java.util.UUID.randomUUID().toString().substring(0, 8);
+        User user = userRepository.save(new User("ana-" + uniqueSuffix + "@example.com", "hash", Role.CLIENT, "Ana", "Pérez",
+                DocumentType.CC, "123-" + uniqueSuffix, "300" + uniqueSuffix, "v1.0", now));
         RefreshToken token = refreshTokenRepository.save(
                 new RefreshToken(user.getId(), "a".repeat(64), now.plusSeconds(600), now));
 
@@ -49,8 +50,9 @@ class RefreshTokenRepositoryTest {
     @Test
     void alBorrarElUsuarioSeBorranSusRefreshTokens() {
         Instant now = Instant.now();
-        User user = userRepository.save(new User("ana-" + java.util.UUID.randomUUID() + "@example.com", "hash", Role.CLIENT, "Ana", "Pérez",
-                DocumentType.CC, "123", "3001112233", "v1.0", now));
+        String uniqueSuffix = java.util.UUID.randomUUID().toString().substring(0, 8);
+        User user = userRepository.save(new User("ana-" + uniqueSuffix + "@example.com", "hash", Role.CLIENT, "Ana", "Pérez",
+                DocumentType.CC, "123-" + uniqueSuffix, "300" + uniqueSuffix, "v1.0", now));
         refreshTokenRepository.save(new RefreshToken(user.getId(), "b".repeat(64), now.plusSeconds(600), now));
 
         userRepository.deleteAll();
