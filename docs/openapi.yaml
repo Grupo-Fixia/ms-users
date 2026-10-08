@@ -1,0 +1,428 @@
+openapi: 3.0.3
+info:
+  title: ms-users
+  version: 0.0.1
+  description: |
+    Registro de clientes y técnicos, inicio y cierre de sesión, y perfil profesional del técnico
+    (GC-234 / GC-235 / GC-236 / GC-237).
+
+    Los errores usan RFC 7807 (`application/problem+json`). Todas las respuestas 401 son idénticas
+    (cabecera `WWW-Authenticate: Bearer` y el mismo cuerpo) para no revelar el motivo del rechazo.
+
+    Rutas: Traefik enruta `/api/users` sin quitar el prefijo, por eso las rutas incluyen `/api/users`.
+
+    Tiempos de vida por defecto (configurables, el SRS no los define): access token 15 min, refresh token 7 días.
+servers:
+  - url: http://localhost
+    description: Traefik (docker compose)
+  - url: http://localhost:8080
+    description: Servicio directo (perfil local)
+
+paths:
+  /api/users/clients:
+    post:
+      summary: Registrar cuenta de cliente (GC-251)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientRegistrationRequest'
+      responses:
+        '201':
+          description: Cuenta creada con rol CLIENT. La respuesta nunca incluye la contraseña ni su hash.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientRegistrationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Ya existe una cuenta con ese correo o ese documento.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/users/technicians:
+    post:
+      summary: Registrar cuenta de técnico (GC-254)
+      description: |
+        Mismos datos y validaciones que el registro de cliente. Crea la cuenta con rol PROFESSIONAL y, en la
+        misma transacción, su perfil de técnico con verificación PENDING y sin información profesional.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianRegistrationRequest'
+      responses:
+        '201':
+          description: Cuenta creada con rol PROFESSIONAL. La respuesta nunca incluye la contraseña ni su hash.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianRegistrationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Ya existe una cuenta (de cualquier rol) con ese correo o ese documento.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/users/technicians/me/profile:
+    get:
+      summary: Consultar el perfil profesional del técnico autenticado (GC-262)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil profesional. Los campos profesionales son null hasta que el técnico los registra.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+    put:
+      summary: Registrar o actualizar el perfil profesional del técnico autenticado (GC-262)
+      description: |
+        Reemplaza por completo la información profesional. El técnico se toma del token, nunca de la petición,
+        por lo que nadie puede modificar el perfil de otro técnico.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianProfileRequest'
+      responses:
+        '200':
+          description: Perfil actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianProfile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+
+  /api/users/auth/login:
+    post:
+      summary: Iniciar sesión (GC-257)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Sesión iniciada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: |
+            Credenciales inválidas. El mensaje es el mismo si el correo no existe, la contraseña es
+            incorrecta o la cuenta está deshabilitada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: about:blank
+                title: No autenticado
+                status: 401
+                detail: Credenciales inválidas
+                instance: /api/users/auth/login
+
+  /api/users/auth/refresh:
+    post:
+      summary: Renovar la sesión (GC-257)
+      description: |
+        Canjea un refresh token por un par nuevo. El refresh token presentado queda revocado:
+        es de un solo uso, por lo que el cliente debe guardar siempre el nuevo.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Par de tokens nuevo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Refresh token desconocido, expirado, revocado o de una cuenta deshabilitada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/users/auth/logout:
+    post:
+      summary: Cerrar sesión (GC-259)
+      description: |
+        Invalida de inmediato el access token usado en la llamada y revoca el refresh token enviado.
+        Solo afecta a la sesión actual: las sesiones del mismo usuario en otros dispositivos siguen activas.
+        El refresh token solo se revoca si es del mismo usuario del access token; si es desconocido, ya
+        estaba revocado o es de otra cuenta, no hay error ni efecto (la respuesta no permite averiguarlo).
+        Repetir la llamada con el mismo access token devuelve 401, porque ya fue invalidado.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '204':
+          description: Sesión cerrada.
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users/me:
+    get:
+      summary: Perfil del usuario autenticado
+      description: Ruta privada de ejemplo; sirve para comprobar si la sesión sigue siendo válida.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil sin datos sensibles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token RS256. Claims: `iss`, `sub` (`usr_<uuid>`), `aud`, `iat`, `exp`, `jti` y `roles`
+        (por ejemplo `["ROLE_CLIENT"]`).
+
+  responses:
+    Unauthorized:
+      description: |
+        Sin token, token inválido, expirado, firmado con otra clave, revocado por logout, o cuenta
+        deshabilitada. No se indica el motivo.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+            example: Bearer
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: about:blank
+            title: No autenticado
+            status: 401
+            detail: Se requiere autenticación válida
+            instance: /api/users/me
+    Forbidden:
+      description: Sesión válida, pero el rol no permite la acción (por ejemplo, un cliente en una ruta de técnico).
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: about:blank
+            title: Acceso denegado
+            status: 403
+            detail: Su rol no permite realizar esta acción
+            instance: /api/users/technicians/me/profile
+    TechnicianProfileNotFound:
+      description: La cuenta tiene rol PROFESSIONAL pero no tiene perfil de técnico.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    ValidationError:
+      description: Datos inválidos o faltantes; `errors` indica qué corregir.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ValidationProblem'
+
+  schemas:
+    ClientRegistrationRequest:
+      type: object
+      required: [firstName, lastName, documentType, documentNumber, email, phone, password, policyVersion, consentAccepted]
+      properties:
+        firstName: { type: string, maxLength: 100, example: Ana }
+        lastName: { type: string, maxLength: 100, example: Pérez }
+        documentType: { type: string, enum: [CC, CE, PASSPORT] }
+        documentNumber: { type: string, maxLength: 30, pattern: '^[A-Za-z0-9]+$', example: '1020304050' }
+        email: { type: string, format: email, maxLength: 254, example: ana.perez@example.com }
+        phone: { type: string, pattern: '^\+?[0-9]{7,15}$', example: '+573001112233' }
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 72
+          description: Debe incluir letras y números.
+        policyVersion:
+          type: string
+          maxLength: 20
+          description: Versión de la política de tratamiento de datos que aceptó el cliente.
+          example: v1.0
+        consentAccepted:
+          type: boolean
+          description: Debe ser true. El servidor registra la fecha y la versión aceptadas.
+
+    ClientRegistrationResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        role: { type: string, enum: [CLIENT, PROFESSIONAL, ADMIN] }
+        createdAt: { type: string, format: date-time }
+
+    TechnicianRegistrationRequest:
+      allOf:
+        - $ref: '#/components/schemas/ClientRegistrationRequest'
+      description: Idéntico al registro de cliente.
+
+    TechnicianRegistrationResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid, description: Id de la cuenta (users). }
+        technicianId: { type: string, format: uuid, description: Id del perfil de técnico (technicians). }
+        email: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        role: { type: string, enum: [PROFESSIONAL] }
+        verificationStatus: { $ref: '#/components/schemas/VerificationStatus' }
+        createdAt: { type: string, format: date-time }
+
+    TechnicianProfileRequest:
+      type: object
+      required: [professionalDescription, yearsOfExperience, categories]
+      properties:
+        professionalDescription:
+          type: string
+          maxLength: 1000
+          example: Plomero con experiencia en redes hidráulicas residenciales.
+        yearsOfExperience: { type: integer, minimum: 0, maximum: 80, example: 8 }
+        categories:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/ServiceCategory' }
+
+    TechnicianProfile:
+      type: object
+      properties:
+        technicianId: { type: string, format: uuid }
+        verificationStatus: { $ref: '#/components/schemas/VerificationStatus' }
+        professionalDescription: { type: string, nullable: true }
+        yearsOfExperience: { type: integer, nullable: true }
+        categories:
+          type: array
+          items: { $ref: '#/components/schemas/ServiceCategory' }
+        updatedAt: { type: string, format: date-time }
+
+    VerificationStatus:
+      type: string
+      enum: [PENDING, VALID, REJECTED, EXPIRED]
+      description: Lo custodia Verificación; al registrarse siempre es PENDING.
+
+    ServiceCategory:
+      type: string
+      enum: [PLUMBING, ELECTRICAL, MAINTENANCE, LOCKSMITHING, PAINTING, CARPENTRY]
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, maxLength: 254 }
+        password: { type: string, format: password, maxLength: 128 }
+
+    RefreshRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, maxLength: 200 }
+
+    LogoutRequest:
+      type: object
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, maxLength: 200 }
+
+    TokenResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        refreshToken: { type: string }
+        tokenType: { type: string, example: Bearer }
+        expiresIn: { type: integer, format: int64, description: "Segundos de vida del access token.", example: 900 }
+
+    UserProfile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        role: { type: string, enum: [CLIENT, PROFESSIONAL, ADMIN] }
+
+    Problem:
+      type: object
+      properties:
+        type: { type: string, example: "about:blank" }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+
+    ValidationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            errors:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string, example: email }
+                  message: { type: string, example: El correo electrónico no es válido }
