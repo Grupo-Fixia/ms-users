@@ -63,3 +63,7 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
   colección.
 - Perfil profesional (RF-009): descripción, años de experiencia y categorías (`PLUMBING`, `ELECTRICAL`,
   `MAINTENANCE`, `LOCKSMITHING`, `PAINTING`, `CARPENTRY`). Un técnico no puede repetir una categoría.
+- Especialidades y servicios ofrecidos (RF-010): son esas mismas categorías, en un solo nivel. La base rechaza
+  cualquier valor fuera del catálogo, así que agregar una categoría exige una migración que amplíe la restricción.
+- `technicians.version` es un bloqueo optimista: una escritura sobre datos que otra solicitud ya modificó responde
+  409 "Modificación concurrente" en vez de pisarla.
