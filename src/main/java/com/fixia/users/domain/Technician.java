@@ -10,6 +10,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 import java.time.Instant;
 import java.util.EnumSet;
@@ -51,6 +52,11 @@ public class Technician {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    /** Bloqueo optimista: una escritura hecha sobre datos ya modificados por otra se rechaza en vez de pisarla. */
+    @Version
+    @Column(nullable = false)
+    private long version;
+
     protected Technician() {
     }
 
@@ -61,15 +67,21 @@ public class Technician {
         this.updatedAt = now;
     }
 
-    /**
-     * Reemplaza la información profesional. Las categorías se ajustan por diferencia (no se borran y se
-     * vuelven a crear) porque Hibernate ejecuta los INSERT antes que los DELETE y la unicidad
-     * (technician_id, category) fallaría al conservar una categoría.
-     */
+    /** Reemplaza la información profesional y las categorías. */
     public void updateProfile(String professionalDescription, short yearsOfExperience,
                               Set<ServiceCategory> newCategories, Instant now) {
         this.professionalDescription = professionalDescription;
         this.yearsOfExperience = yearsOfExperience;
+        replaceCategories(newCategories, now);
+    }
+
+    /**
+     * Reemplaza las especialidades y servicios ofrecidos (RF-010) sin tocar el resto del perfil; el conjunto
+     * puede quedar vacío (RN-019). Las categorías se ajustan por diferencia (no se borran y se vuelven a
+     * crear) porque Hibernate ejecuta los INSERT antes que los DELETE y la unicidad (technician_id, category)
+     * fallaría al conservar una categoría.
+     */
+    public void replaceCategories(Set<ServiceCategory> newCategories, Instant now) {
         categories.removeIf(existing -> !newCategories.contains(existing.getCategory()));
         Set<ServiceCategory> current = getCategories();
         newCategories.stream()
@@ -110,5 +122,9 @@ public class Technician {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public long getVersion() {
+        return version;
     }
 }
