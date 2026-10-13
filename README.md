@@ -58,6 +58,11 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
   en la misma transacción. Pide los mismos datos y el mismo consentimiento que el registro de cliente.
 - `GET` / `PUT /api/users/technicians/me/profile` consultan y reemplazan la información profesional. Solo con rol
   `PROFESSIONAL`; el técnico siempre sale del token, así que nadie puede tocar el perfil de otro. Un cliente recibe 403.
+- `GET` / `PUT /api/users/technicians/me/categories` consultan y reemplazan solo las especialidades y servicios del
+  técnico (RF-010), sin tocar el resto del perfil. `GET /api/users/service-categories` devuelve el catálogo habilitado
+  a cualquier usuario autenticado.
+- Las escrituras del perfil bloquean la fila del técnico: dos actualizaciones simultáneas se aplican una tras otra
+  en vez de chocar (DEF-QA-02).
 - Persistencia relacional (PostgreSQL), según el DD V2: `technicians` es la tabla TECNICO (especialización 1:1 de
   `users`) y `technician_categories` es TECNICO_CATEGORIA. Este servicio no usa MongoDB: el DD no le asigna ninguna
   colección.
