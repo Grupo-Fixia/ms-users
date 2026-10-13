@@ -1,5 +1,6 @@
 package com.fixia.users.service;
 
+import com.fixia.users.domain.ServiceCategory;
 import com.fixia.users.domain.Technician;
 import com.fixia.users.domain.UserStatus;
 import com.fixia.users.dto.TechnicianProfileRequest;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -38,7 +40,7 @@ public class TechnicianProfileService {
 
     @Transactional
     public Technician update(UUID userId, TechnicianProfileRequest request) {
-        Technician technician = findTechnicianOfActiveUser(userId);
+        Technician technician = lockTechnicianOfActiveUser(userId);
         technician.updateProfile(
                 request.professionalDescription().trim(),
                 request.yearsOfExperience(),
@@ -47,11 +49,30 @@ public class TechnicianProfileService {
         return technicianRepository.saveAndFlush(technician);
     }
 
+    /** Reemplaza solo las especialidades y servicios ofrecidos (RF-010); el resto del perfil no cambia. */
+    @Transactional
+    public Technician updateCategories(UUID userId, Set<ServiceCategory> categories) {
+        Technician technician = lockTechnicianOfActiveUser(userId);
+        technician.replaceCategories(categories, clock.instant());
+        return technicianRepository.saveAndFlush(technician);
+    }
+
     /** Igual que GET /api/users/me: si la cuenta ya no existe o está deshabilitada, la sesión deja de valer (401). */
     private Technician findTechnicianOfActiveUser(UUID userId) {
+        requireActiveUser(userId);
+        return technicianRepository.findByUserId(userId).orElseThrow(TechnicianProfileNotFoundException::new);
+    }
+
+    /** Igual que la anterior, pero bloquea al técnico: es la que usan las escrituras (ver el repositorio). */
+    private Technician lockTechnicianOfActiveUser(UUID userId) {
+        requireActiveUser(userId);
+        return technicianRepository.findByUserIdForUpdate(userId)
+                .orElseThrow(TechnicianProfileNotFoundException::new);
+    }
+
+    private void requireActiveUser(UUID userId) {
         userRepository.findById(userId)
                 .filter(user -> user.getStatus() == UserStatus.ACTIVE)
                 .orElseThrow(() -> new BadCredentialsException("Sesión no válida"));
-        return technicianRepository.findByUserId(userId).orElseThrow(TechnicianProfileNotFoundException::new);
     }
 }
