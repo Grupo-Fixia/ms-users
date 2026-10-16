@@ -1,7 +1,9 @@
 package com.fixia.users.domain;
 
+import com.fixia.users.exception.InvalidTechnicianDataException;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -15,12 +17,13 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
 /**
  * Especialización 1:1 de {@link User} para el rol PROFESSIONAL (tabla TECNICO del DD V2).
- * Reputación y cobertura se agregan con las tareas que las usan.
+ * La reputación se agrega con la tarea que la use.
  */
 @Entity
 @Table(name = "technicians")
@@ -45,6 +48,13 @@ public class Technician {
 
     @OneToMany(mappedBy = "technician", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<TechnicianCategory> categories = new HashSet<>();
+
+    /** Null mientras el técnico no declare su zona de atención. */
+    @Embedded
+    private CoverageZone coverageZone;
+
+    @OneToMany(mappedBy = "technician", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<TechnicianAvailability> availability = new HashSet<>();
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -90,6 +100,32 @@ public class Technician {
         this.updatedAt = now;
     }
 
+    /** Declara o reemplaza la zona de atención (RF-011); con null el técnico la retira. Ver {@link CoverageZone}. */
+    public void updateCoverageZone(CoverageZone newCoverageZone, Instant now) {
+        this.coverageZone = newCoverageZone;
+        this.updatedAt = now;
+    }
+
+    /**
+     * Reemplaza la disponibilidad semanal (RF-011); el conjunto puede quedar vacío. Las franjas no pueden
+     * cruzarse entre sí. Igual que las categorías, se ajustan por diferencia para no chocar con la unicidad de
+     * la tabla cuando una franja se conserva.
+     */
+    public void replaceAvailability(Set<AvailabilitySlot> newSlots, Instant now) {
+        List<AvailabilitySlot> ordered = newSlots.stream().sorted().toList();
+        for (int i = 1; i < ordered.size(); i++) {
+            if (ordered.get(i - 1).overlaps(ordered.get(i))) {
+                throw new InvalidTechnicianDataException("Las franjas de disponibilidad no pueden cruzarse");
+            }
+        }
+        availability.removeIf(existing -> !newSlots.contains(existing.getSlot()));
+        List<AvailabilitySlot> current = getAvailability();
+        ordered.stream()
+                .filter(slot -> !current.contains(slot))
+                .forEach(slot -> availability.add(new TechnicianAvailability(this, slot)));
+        this.updatedAt = now;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -114,6 +150,23 @@ public class Technician {
         Set<ServiceCategory> result = EnumSet.noneOf(ServiceCategory.class);
         categories.forEach(category -> result.add(category.getCategory()));
         return result;
+    }
+
+    public CoverageZone getCoverageZone() {
+        return coverageZone;
+    }
+
+    /** Franjas ordenadas por día y hora de inicio. */
+    public List<AvailabilitySlot> getAvailability() {
+        return availability.stream().map(TechnicianAvailability::getSlot).sorted().toList();
+    }
+
+    /**
+     * Regla de compatibilidad por horario (para GC-337): si el momento esperado de una solicitud cae dentro de
+     * alguna franja del técnico. Sin franjas declaradas nunca está disponible.
+     */
+    public boolean isAvailableAt(Instant instant) {
+        return availability.stream().anyMatch(slot -> slot.getSlot().includes(instant));
     }
 
     public Instant getCreatedAt() {

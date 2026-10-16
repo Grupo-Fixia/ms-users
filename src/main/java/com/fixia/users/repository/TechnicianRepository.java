@@ -13,14 +13,14 @@ import java.util.UUID;
 
 public interface TechnicianRepository extends JpaRepository<Technician, UUID> {
 
-    /** Trae las categorías en la misma consulta: open-in-view está desactivado. */
-    @EntityGraph(attributePaths = "categories")
+    /** Trae las categorías y la disponibilidad en la misma consulta: open-in-view está desactivado. */
+    @EntityGraph(attributePaths = {"categories", "availability"})
     Optional<Technician> findByUserId(UUID userId);
 
     /**
      * Para escribir: toma la fila del técnico en exclusiva hasta el fin de la transacción, de modo que dos
      * actualizaciones simultáneas del mismo perfil se aplican una tras otra y la segunda ya ve las categorías
-     * que dejó la primera. Las categorías se cargan después, dentro de la misma transacción.
+     * que dejó la primera. Las categorías y la disponibilidad se cargan después, dentro de la misma transacción.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from Technician t where t.userId = :userId")

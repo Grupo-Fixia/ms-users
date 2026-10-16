@@ -79,4 +79,11 @@ public class GlobalExceptionHandler {
         problem.setTitle("Modificación concurrente");
         return problem;
     }
+
+    @ExceptionHandler(InvalidTechnicianDataException.class)
+    public ProblemDetail handleInvalidTechnicianData(InvalidTechnicianDataException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setTitle("Datos inválidos");
+        return problem;
+    }
 }
