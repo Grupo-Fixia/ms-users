@@ -19,4 +19,14 @@ class GlobalExceptionHandlerTest {
         assertThat(problem.getTitle()).isEqualTo("Modificación concurrente");
         assertThat(problem.getDetail()).doesNotContain("cuenta");
     }
+
+    @Test
+    void unDatoInvalidoDelTecnicoResponde400ConElMensajeDelDominio() {
+        ProblemDetail problem = handler.handleInvalidTechnicianData(
+                new InvalidTechnicianDataException("La ciudad es obligatoria"));
+
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problem.getTitle()).isEqualTo("Datos inválidos");
+        assertThat(problem.getDetail()).isEqualTo("La ciudad es obligatoria");
+    }
 }
