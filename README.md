@@ -61,6 +61,10 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
 - `GET` / `PUT /api/users/technicians/me/categories` consultan y reemplazan solo las especialidades y servicios del
   técnico (RF-010), sin tocar el resto del perfil. `GET /api/users/service-categories` devuelve el catálogo habilitado
   a cualquier usuario autenticado.
+- `GET` / `PUT` / `DELETE /api/users/technicians/me/coverage-zone` consultan, reemplazan y retiran la zona de atención
+  (ciudad obligatoria y círculo opcional). `GET` / `PUT /api/users/technicians/me/availability` consultan y reemplazan
+  la disponibilidad semanal (franjas en hora de Colombia, sin cruzarse; las horas van como `"08:00"`). Solo con rol
+  `PROFESSIONAL`; un dato que incumple una regla responde 400.
 - Las escrituras del perfil bloquean la fila del técnico: dos actualizaciones simultáneas se aplican una tras otra
   en vez de chocar (DEF-QA-02).
 - Persistencia relacional (PostgreSQL), según el DD V2: `technicians` es la tabla TECNICO (especialización 1:1 de
