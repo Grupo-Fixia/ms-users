@@ -70,5 +70,13 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
   `MAINTENANCE`, `LOCKSMITHING`, `PAINTING`, `CARPENTRY`). Un técnico no puede repetir una categoría.
 - Especialidades y servicios ofrecidos (RF-010): son esas mismas categorías, en un solo nivel. La base rechaza
   cualquier valor fuera del catálogo, así que agregar una categoría exige una migración que amplíe la restricción.
+- Disponibilidad y zona de atención (RF-011), por ahora solo persistencia, con la misma forma que la solicitud de
+  ms-services:
+  - Zona en `technicians`: ciudad obligatoria (`coverage_city`) y, si se quiere precisar, un círculo
+    (`coverage_latitude`, `coverage_longitude` redondeadas a dos decimales y `coverage_radius_km` de 1 a 100; las tres
+    van juntas). `CoverageZone#covers` aplica la regla: misma ciudad y, si hay círculo y la solicitud trae
+    coordenadas, dentro del radio.
+  - Disponibilidad en `technician_availability`: franjas semanales (día, hora de inicio y hora de fin) en hora de
+    Colombia, varias por día y sin cruzarse. `Technician#isAvailableAt` compara el instante esperado de la solicitud.
 - `technicians.version` es un bloqueo optimista: una escritura sobre datos que otra solicitud ya modificó responde
   409 "Modificación concurrente" en vez de pisarla.
