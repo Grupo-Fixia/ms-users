@@ -82,5 +82,11 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
     coordenadas, dentro del radio.
   - Disponibilidad en `technician_availability`: franjas semanales (día, hora de inicio y hora de fin) en hora de
     Colombia, varias por día y sin cruzarse. `Technician#isAvailableAt` compara el instante esperado de la solicitud.
+- **Elegibilidad para otros servicios (GC-342):** `POST /internal/technicians/{userId}/eligibility` recibe una o varias
+  solicitudes (categoría, ciudad, coordenadas aproximadas y momento esperado) y responde por cada una si el técnico es
+  elegible y, si no, los motivos (`TECHNICIAN_NOT_FOUND`, `CATEGORY`, `ZONE`, `AVAILABILITY`, `VERIFICATION`). La usa
+  ms-services al postular (GC-342) y al listar solicitudes compatibles (GC-337). Va bajo `/internal/**` para que la
+  proteja la clave compartida de la consulta de revocación (GC-333). La verificación vigente solo se exige con
+  `fixia.eligibility.require-verified=true` (por defecto `false`: aún no hay flujo de verificación, RN-001).
 - `technicians.version` es un bloqueo optimista: una escritura sobre datos que otra solicitud ya modificó responde
   409 "Modificación concurrente" en vez de pisarla.
