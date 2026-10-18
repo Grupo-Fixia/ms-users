@@ -72,8 +72,35 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
   en la misma transacción. Pide los mismos datos y el mismo consentimiento que el registro de cliente.
 - `GET` / `PUT /api/users/technicians/me/profile` consultan y reemplazan la información profesional. Solo con rol
   `PROFESSIONAL`; el técnico siempre sale del token, así que nadie puede tocar el perfil de otro. Un cliente recibe 403.
+- `GET` / `PUT /api/users/technicians/me/categories` consultan y reemplazan solo las especialidades y servicios del
+  técnico (RF-010), sin tocar el resto del perfil. `GET /api/users/service-categories` devuelve el catálogo habilitado
+  a cualquier usuario autenticado.
+- `GET` / `PUT` / `DELETE /api/users/technicians/me/coverage-zone` consultan, reemplazan y retiran la zona de atención
+  (ciudad obligatoria y círculo opcional). `GET` / `PUT /api/users/technicians/me/availability` consultan y reemplazan
+  la disponibilidad semanal (franjas en hora de Colombia, sin cruzarse; las horas van como `"08:00"`). Solo con rol
+  `PROFESSIONAL`; un dato que incumple una regla responde 400.
+- Las escrituras del perfil bloquean la fila del técnico: dos actualizaciones simultáneas se aplican una tras otra
+  en vez de chocar (DEF-QA-02).
 - Persistencia relacional (PostgreSQL), según el DD V2: `technicians` es la tabla TECNICO (especialización 1:1 de
   `users`) y `technician_categories` es TECNICO_CATEGORIA. Este servicio no usa MongoDB: el DD no le asigna ninguna
   colección.
 - Perfil profesional (RF-009): descripción, años de experiencia y categorías (`PLUMBING`, `ELECTRICAL`,
   `MAINTENANCE`, `LOCKSMITHING`, `PAINTING`, `CARPENTRY`). Un técnico no puede repetir una categoría.
+- Especialidades y servicios ofrecidos (RF-010): son esas mismas categorías, en un solo nivel. La base rechaza
+  cualquier valor fuera del catálogo, así que agregar una categoría exige una migración que amplíe la restricción.
+- Disponibilidad y zona de atención (RF-011), por ahora solo persistencia, con la misma forma que la solicitud de
+  ms-services:
+  - Zona en `technicians`: ciudad obligatoria (`coverage_city`) y, si se quiere precisar, un círculo
+    (`coverage_latitude`, `coverage_longitude` redondeadas a dos decimales y `coverage_radius_km` de 1 a 100; las tres
+    van juntas). `CoverageZone#covers` aplica la regla: misma ciudad y, si hay círculo y la solicitud trae
+    coordenadas, dentro del radio.
+  - Disponibilidad en `technician_availability`: franjas semanales (día, hora de inicio y hora de fin) en hora de
+    Colombia, varias por día y sin cruzarse. `Technician#isAvailableAt` compara el instante esperado de la solicitud.
+- **Elegibilidad para otros servicios (GC-342):** `POST /internal/technicians/{userId}/eligibility` recibe una o varias
+  solicitudes (categoría, ciudad, coordenadas aproximadas y momento esperado) y responde por cada una si el técnico es
+  elegible y, si no, los motivos (`TECHNICIAN_NOT_FOUND`, `CATEGORY`, `ZONE`, `AVAILABILITY`, `VERIFICATION`). La usa
+  ms-services al postular (GC-342) y al listar solicitudes compatibles (GC-337). Va bajo `/internal/**` para que la
+  proteja la clave compartida de la consulta de revocación (GC-333). La verificación vigente solo se exige con
+  `fixia.eligibility.require-verified=true` (por defecto `false`: aún no hay flujo de verificación, RN-001).
+- `technicians.version` es un bloqueo optimista: una escritura sobre datos que otra solicitud ya modificó responde
+  409 "Modificación concurrente" en vez de pisarla.

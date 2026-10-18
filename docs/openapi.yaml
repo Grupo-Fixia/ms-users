@@ -4,7 +4,8 @@ info:
   version: 0.0.1
   description: |
     Registro de clientes y técnicos, inicio y cierre de sesión, y perfil profesional del técnico
-    (GC-234 / GC-235 / GC-236 / GC-237).
+    (GC-234 / GC-235 / GC-236 / GC-237), especialidades y servicios ofrecidos por el técnico (GC-294), y su
+    disponibilidad y zona de atención (GC-295).
 
     Los errores usan RFC 7807 (`application/problem+json`). Todas las respuestas 401 son idénticas
     (cabecera `WWW-Authenticate: Bearer` y el mismo cuerpo) para no revelar el motivo del rechazo.
@@ -120,6 +121,215 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/TechnicianProfileNotFound'
+
+  /api/users/technicians/me/categories:
+    get:
+      summary: Consultar las especialidades y servicios del técnico autenticado (GC-322)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Categorías seleccionadas; lista vacía si el técnico aún no ha seleccionado ninguna.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianCategories'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+    put:
+      summary: Seleccionar o actualizar las especialidades y servicios del técnico autenticado (GC-322)
+      description: |
+        Reemplaza por completo las categorías seleccionadas, sin tocar el resto del perfil profesional. Solo se
+        aceptan valores del catálogo (`GET /api/users/service-categories`); una lista vacía las retira todas. El
+        técnico se toma del token, nunca de la petición. Las actualizaciones simultáneas del mismo técnico se
+        aplican una tras otra: prevalece la última.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianCategoriesRequest'
+      responses:
+        '200':
+          description: Categorías actualizadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianCategories'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+
+  /api/users/technicians/me/coverage-zone:
+    get:
+      summary: Consultar la zona de atención del técnico autenticado (GC-327)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Zona actual; todos sus campos son null mientras el técnico no la declare.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageZone'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+    put:
+      summary: Declarar o reemplazar la zona de atención del técnico autenticado (GC-327)
+      description: |
+        Ciudad obligatoria y, si se quiere precisar, un círculo: latitud, longitud y radio van juntos o se omiten los
+        tres. Las coordenadas se guardan con dos decimales (~1 km), igual que la ubicación aproximada de una solicitud
+        en ms-services. El técnico se toma del token.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverageZoneRequest'
+      responses:
+        '200':
+          description: Zona actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageZone'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+    delete:
+      summary: Retirar la zona de atención del técnico autenticado (GC-327)
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Zona retirada.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+
+  /api/users/technicians/me/availability:
+    get:
+      summary: Consultar la disponibilidad semanal del técnico autenticado (GC-327)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Franjas ordenadas por día y hora de inicio; lista vacía si no hay ninguna.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+    put:
+      summary: Reemplazar la disponibilidad semanal del técnico autenticado (GC-327)
+      description: |
+        Reemplaza todas las franjas; una lista vacía las retira. Las horas son de Colombia (America/Bogota), van como
+        "HH:mm" y se guardan al minuto. Las franjas no pueden cruzarse; dos seguidas (08:00-12:00 y 12:00-14:00) sí
+        valen. Las actualizaciones simultáneas del mismo técnico se aplican una tras otra.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvailabilityRequest'
+      responses:
+        '200':
+          description: Disponibilidad actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+
+  /internal/technicians/{userId}/eligibility:
+    post:
+      summary: Evaluar si un técnico es elegible para una o varias solicitudes (GC-342, interna)
+      description: |
+        Ruta interna para otros microservicios (ms-services); Traefik y el Ingress no la exponen. Va bajo
+        `/internal/**`, que protege la cabecera `X-Internal-Api-Key` (GC-333). `userId` es el `users.id` del
+        técnico. Un técnico es elegible si la categoría está entre sus especialidades, su zona cubre la ubicación
+        aproximada y el momento esperado cae en alguna de sus franjas (hora de Colombia). La verificación vigente
+        solo se exige si `fixia.eligibility.require-verified` está activo. Un técnico inexistente o deshabilitado no
+        da 404: cada resultado sale no elegible con `TECHNICIAN_NOT_FOUND`. No se debe cachear.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EligibilityRequest'
+      responses:
+        '200':
+          description: Un resultado por solicitud, en el mismo orden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users/service-categories:
+    get:
+      summary: Consultar el catálogo habilitado de especialidades y servicios (GC-322)
+      description: Disponible para cualquier usuario autenticado, sin importar el rol.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Categorías habilitadas, con el código que usa la API y su nombre para mostrar.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceCategoryItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /api/users/auth/login:
     post:
@@ -359,6 +569,109 @@ components:
           type: array
           items: { $ref: '#/components/schemas/ServiceCategory' }
         updatedAt: { type: string, format: date-time }
+
+    TechnicianCategoriesRequest:
+      type: object
+      required: [categories]
+      properties:
+        categories:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/ServiceCategory' }
+
+    TechnicianCategories:
+      type: object
+      properties:
+        categories:
+          type: array
+          items: { $ref: '#/components/schemas/ServiceCategory' }
+        updatedAt: { type: string, format: date-time }
+
+    ServiceCategoryItem:
+      type: object
+      properties:
+        code: { $ref: '#/components/schemas/ServiceCategory' }
+        name: { type: string, example: Plomería }
+
+    CoverageZoneRequest:
+      type: object
+      required: [city]
+      properties:
+        city: { type: string, maxLength: 100, example: Bogotá }
+        latitude: { type: number, minimum: -90, maximum: 90, nullable: true, example: 4.65 }
+        longitude: { type: number, minimum: -180, maximum: 180, nullable: true, example: -74.08 }
+        radiusKm: { type: integer, minimum: 1, maximum: 100, nullable: true, example: 15 }
+
+    CoverageZone:
+      type: object
+      properties:
+        city: { type: string, nullable: true }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+        radiusKm: { type: integer, nullable: true }
+        updatedAt: { type: string, format: date-time }
+
+    AvailabilitySlot:
+      type: object
+      required: [dayOfWeek, startTime, endTime]
+      properties:
+        dayOfWeek:
+          type: string
+          enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        startTime: { type: string, example: "08:00" }
+        endTime: { type: string, example: "12:00" }
+
+    AvailabilityRequest:
+      type: object
+      required: [slots]
+      properties:
+        slots:
+          type: array
+          items: { $ref: '#/components/schemas/AvailabilitySlot' }
+
+    Availability:
+      type: object
+      properties:
+        slots:
+          type: array
+          items: { $ref: '#/components/schemas/AvailabilitySlot' }
+        timeZone: { type: string, example: America/Bogota }
+        updatedAt: { type: string, format: date-time }
+
+    EligibilityRequest:
+      type: object
+      required: [requests]
+      properties:
+        requests:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [requestId, category, city, expectedAt]
+            properties:
+              requestId: { type: string, format: uuid }
+              category: { $ref: '#/components/schemas/ServiceCategory' }
+              city: { type: string, example: Bogotá }
+              latitude: { type: number, nullable: true }
+              longitude: { type: number, nullable: true }
+              expectedAt: { type: string, format: date-time }
+
+    EligibilityResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              requestId: { type: string, format: uuid }
+              eligible: { type: boolean }
+              reasons:
+                type: array
+                items:
+                  type: string
+                  enum: [TECHNICIAN_NOT_FOUND, CATEGORY, ZONE, AVAILABILITY, VERIFICATION]
 
     VerificationStatus:
       type: string
