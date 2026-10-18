@@ -52,6 +52,20 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
 - El cierre de sesión invalida el access token en el acto (lista de `jti` revocados) y revoca el refresh token.
 - Un job borra cada hora los tokens ya expirados.
 
+## Perfil del cliente
+
+- El perfil del cliente **no tiene tabla propia**: son los datos de la cuenta en `users` (GC-318). Así editarlo no
+  puede desalinearse de la cuenta y no hay datos duplicados.
+- Editables por el titular: **nombre, apellido y teléfono** (`User#updateContactInfo`). El correo (es el login y
+  requeriría verificación) y el documento (identidad única) son de solo lectura; el rol, el estado, la contraseña y
+  el consentimiento tienen sus propios flujos.
+- Los valores se guardan sin espacios sobrantes; el teléfono admite `+` opcional y de 7 a 15 dígitos
+  (`User.PHONE_REGEX`). No hay migración: las columnas ya existen.
+- `UserRepository#findByIdAndRole` permite obtener la cuenta solo si es del rol esperado (un técnico no entra por la
+  ruta de cliente).
+- La edición es de último escritor gana (sin `@Version`): son tres campos del propio titular.
+- La API de consulta y actualización llega con GC-317.
+
 ## Técnicos
 
 - `POST /api/users/technicians` crea la cuenta con rol `PROFESSIONAL` y su fila en `technicians` (verificación `PENDING`)
