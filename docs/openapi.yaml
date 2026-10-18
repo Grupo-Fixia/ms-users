@@ -435,6 +435,48 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /internal/tokens/{jti}/status:
+    get:
+      summary: Consultar si un access token fue revocado (interno, GC-333)
+      description: |
+        **Ruta interna entre microservicios; no es parte de la API pública.** Queda fuera del prefijo
+        `/api/users`, por lo que Traefik y el Ingress no la exponen, y exige la cabecera `X-Internal-Api-Key`
+        (variable `INTERNAL_API_KEY`). La usan servicios como ms-services para saber si un token firmado por
+        este servicio fue invalidado por un cierre de sesión, ya que la lista de `jti` revocados vive en la
+        base de ms-users.
+
+        Un `jti` desconocido responde `revoked: false` (200) y no 404, para que la respuesta no permita
+        averiguar qué identificadores existen. La respuesta lleva `Cache-Control: no-store`.
+      security:
+        - internalApiKey: []
+      parameters:
+        - name: jti
+          in: path
+          required: true
+          description: Claim `jti` del access token.
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        '200':
+          description: Estado de revocación.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revoked]
+                properties:
+                  revoked:
+                    type: boolean
+                    description: "`true` si el token fue revocado antes de expirar."
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -444,6 +486,13 @@ components:
       description: |
         Access token RS256. Claims: `iss`, `sub` (`usr_<uuid>`), `aud`, `iat`, `exp`, `jti` y `roles`
         (por ejemplo `["ROLE_CLIENT"]`).
+    internalApiKey:
+      type: apiKey
+      in: header
+      name: X-Internal-Api-Key
+      description: |
+        Clave compartida entre microservicios (variable `INTERNAL_API_KEY`). Solo para las rutas
+        `/internal/**`; un token de usuario no sirve ahí, y esta clave no sirve en `/api/users/**`.
 
   responses:
     Unauthorized:

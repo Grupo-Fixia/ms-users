@@ -32,8 +32,16 @@ Usa H2 en memoria y un par de claves JWT efímero (los tokens dejan de valer al 
 | `JWT_PUBLIC_KEY` | Clave pública RSA en PEM (X.509), para verificar | **obligatoria** fuera de `local` y `test` |
 | `JWT_ISSUER` / `JWT_AUDIENCE` | Claims `iss` y `aud` | `https://auth.fixia.com` / `https://api.fixia.com` |
 | `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | Vida de los tokens | `15m` / `7d` |
+| `INTERNAL_API_KEY` | Clave compartida para `/internal/**` (consulta de revocación de otros servicios) | vacía: esas rutas rechazan todo |
 
-Sin las dos claves, el servicio **no arranca** (salvo en `local` y `test`). Las claves nunca se guardan en el repositorio.
+Sin las dos claves JWT, el servicio **no arranca** (salvo en `local` y `test`). Las claves nunca se guardan en el repositorio.
+
+## Rutas internas
+
+`GET /internal/tokens/{jti}/status` responde `{"revoked": true|false}`. Lo consultan otros microservicios (ms-services)
+para saber si un access token fue invalidado por un cierre de sesión, porque la lista de revocados vive en la base de
+este servicio. Está fuera de `/api/users` (Traefik y el Ingress no la exponen) y exige la cabecera
+`X-Internal-Api-Key` con el valor de `INTERNAL_API_KEY`. Ver `docs/openapi.yaml`.
 
 Generar un par y dejarlo como variables de una sola línea (los saltos de línea se escriben como `\n`, formato que el
 servicio acepta tal cual):
