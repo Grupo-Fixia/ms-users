@@ -68,6 +68,7 @@ public class SecurityConfig {
                                 "/api/users/technicians",
                                 "/api/users/auth/login",
                                 "/api/users/auth/refresh").permitAll()
+                        .requestMatchers("/api/users/clients/me/**").hasAuthority("ROLE_CLIENT")
                         .requestMatchers("/api/users/technicians/me/**").hasAuthority("ROLE_PROFESSIONAL")
                         .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers("/error").permitAll()

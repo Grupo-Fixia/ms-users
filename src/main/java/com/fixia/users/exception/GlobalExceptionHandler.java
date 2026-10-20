@@ -86,4 +86,11 @@ public class GlobalExceptionHandler {
         problem.setTitle("Datos inválidos");
         return problem;
     }
+
+    @ExceptionHandler(InvalidClientDataException.class)
+    public ProblemDetail handleInvalidClientData(InvalidClientDataException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setTitle("Datos inválidos");
+        return problem;
+    }
 }
