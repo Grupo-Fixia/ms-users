@@ -72,7 +72,15 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
 - `UserRepository#findByIdAndRole` permite obtener la cuenta solo si es del rol esperado (un técnico no entra por la
   ruta de cliente).
 - La edición es de último escritor gana (sin `@Version`): son tres campos del propio titular.
-- La API de consulta y actualización llega con GC-317.
+- **API (GC-317).** `GET` y `PUT /api/users/clients/me/profile`, solo con rol `CLIENT` (un técnico recibe 403, igual
+  que un cliente en las rutas de técnico). El cliente sale siempre del token, nunca de la ruta ni del cuerpo: nadie
+  puede ver ni editar el perfil de otro. `PUT` reemplaza nombre, apellido y teléfono (mismas reglas que el registro:
+  nombre y apellido se guardan sin espacios sobrantes; un teléfono con espacios se rechaza);
+  si algún dato es inválido responde 400 y la cuenta no cambia. Cualquier otro campo del cuerpo (correo, documento,
+  rol, estado) se ignora. `GET` devuelve `id`, `email`, `firstName`, `lastName`, `documentType`, `documentNumber`,
+  `phone` y `createdAt`; nunca el hash de la contraseña, el rol, el estado ni el consentimiento. Si la cuenta ya no
+  existe, está deshabilitada o la sesión se cerró, la respuesta es el mismo 401 de cualquier token inválido. Los
+  DTO no imprimen datos personales en `toString()`.
 
 ## Técnicos
 

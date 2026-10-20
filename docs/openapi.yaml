@@ -46,6 +46,55 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 
+  /api/users/clients/me/profile:
+    get:
+      summary: Consultar el perfil del cliente autenticado (GC-317)
+      description: |
+        Datos de la cuenta del cliente. El cliente se toma del token, nunca de la petición, por lo que nadie puede
+        consultar el perfil de otro cliente. No incluye la contraseña, el rol, el estado ni el consentimiento.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil del cliente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      summary: Actualizar el perfil del cliente autenticado (GC-317)
+      description: |
+        Reemplaza nombre, apellido y teléfono con las mismas reglas que el registro: se eliminan los espacios al inicio y
+        al final del nombre y del apellido; el teléfono debe venir sin espacios. El correo (es el login)
+        y el documento (identidad única) son de solo lectura, y el rol y el estado no se editan aquí: cualquier otro
+        campo del cuerpo se ignora. Si algún dato es inválido no se cambia nada. Los cambios se ven de inmediato al
+        volver a consultar el perfil.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientProfileRequest'
+      responses:
+        '200':
+          description: Perfil actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/users/technicians:
     post:
       summary: Registrar cuenta de técnico (GC-254)
@@ -573,6 +622,29 @@ components:
         firstName: { type: string }
         lastName: { type: string }
         role: { type: string, enum: [CLIENT, PROFESSIONAL, ADMIN] }
+        createdAt: { type: string, format: date-time }
+
+    ClientProfileRequest:
+      type: object
+      required: [firstName, lastName, phone]
+      properties:
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
+        phone:
+          type: string
+          pattern: '^\+?[0-9]{7,15}$'
+          description: Con `+` opcional y de 7 a 15 dígitos.
+
+    ClientProfile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email, description: Solo lectura. }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentType: { type: string, enum: [CC, CE, PASSPORT], description: Solo lectura. }
+        documentNumber: { type: string, description: Solo lectura. }
+        phone: { type: string }
         createdAt: { type: string, format: date-time }
 
     TechnicianRegistrationRequest:
