@@ -3,6 +3,9 @@ package com.fixia.users.dto;
 import com.fixia.users.domain.DocumentType;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import java.util.UUID;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Los DTO con secretos no deben exponerlos si alguien los imprime por error en un log. */
@@ -44,5 +47,16 @@ class SensitiveDataToStringTest {
                 "456", "carlos@example.com", "3104445566", "Tecnico123", "v1.0", true);
 
         assertThat(request.toString()).contains("carlos@example.com").doesNotContain("Tecnico123");
+    }
+
+    @Test
+    void elPerfilDelClienteNoImprimeDatosPersonales() {
+        ClientProfileRequest request = new ClientProfileRequest("Ana", "Pérez", "3001112233");
+        ClientProfileResponse response = new ClientProfileResponse(UUID.randomUUID(), "ana@example.com", "Ana",
+                "Pérez", DocumentType.CC, "123456789", "3001112233", Instant.now());
+
+        assertThat(request.toString()).doesNotContain("Ana").doesNotContain("3001112233");
+        assertThat(response.toString()).doesNotContain("ana@example.com").doesNotContain("123456789")
+                .doesNotContain("3001112233").doesNotContain("Pérez");
     }
 }
