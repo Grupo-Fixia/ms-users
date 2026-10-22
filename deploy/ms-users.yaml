@@ -69,3 +69,20 @@ spec:
               service:
                 name: ms-users
                 port: { number: 8080 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ms-users-metrics
+  namespace: apps
+  labels:
+    app: ms-users
+spec:
+  type: LoadBalancer
+  selector:
+    app: ms-users
+  ports:
+    - name: metrics
+      port: 9101
+      targetPort: 8080
+
