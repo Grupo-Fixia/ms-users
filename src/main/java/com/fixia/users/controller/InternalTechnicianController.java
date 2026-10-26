@@ -2,7 +2,10 @@ package com.fixia.users.controller;
 
 import com.fixia.users.dto.EligibilityRequest;
 import com.fixia.users.dto.EligibilityResponse;
+import com.fixia.users.dto.PublicProfilesRequest;
+import com.fixia.users.dto.PublicProfilesResponse;
 import com.fixia.users.service.TechnicianEligibilityService;
+import com.fixia.users.service.TechnicianPublicProfileService;
 import jakarta.validation.Valid;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -26,9 +29,12 @@ import java.util.UUID;
 public class InternalTechnicianController {
 
     private final TechnicianEligibilityService eligibilityService;
+    private final TechnicianPublicProfileService publicProfileService;
 
-    public InternalTechnicianController(TechnicianEligibilityService eligibilityService) {
+    public InternalTechnicianController(TechnicianEligibilityService eligibilityService,
+                                        TechnicianPublicProfileService publicProfileService) {
         this.eligibilityService = eligibilityService;
+        this.publicProfileService = publicProfileService;
     }
 
     /**
@@ -42,5 +48,17 @@ public class InternalTechnicianController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(eligibilityService.evaluate(userId, request.requests()));
+    }
+
+    /**
+     * Perfil público de varios técnicos a la vez (GC-425), para que ms-services le muestre al cliente quién se
+     * postuló. Los ids que no son de un técnico activo se omiten de la respuesta en lugar de dar 404. No se cachea:
+     * el técnico puede cambiar su perfil en cualquier momento.
+     */
+    @PostMapping("/public-profiles")
+    public ResponseEntity<PublicProfilesResponse> publicProfiles(@Valid @RequestBody PublicProfilesRequest request) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(publicProfileService.find(request.userIds()));
     }
 }

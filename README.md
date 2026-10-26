@@ -118,5 +118,10 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
   ms-services al postular (GC-342) y al listar solicitudes compatibles (GC-337). Va bajo `/internal/**` para que la
   proteja la clave compartida de la consulta de revocación (GC-333). La verificación vigente solo se exige con
   `fixia.eligibility.require-verified=true` (por defecto `false`: aún no hay flujo de verificación, RN-001).
+- **Perfil público para otros servicios (GC-425):** `POST /internal/technicians/public-profiles` recibe hasta 100
+  `userIds` y responde, en el mismo orden, el perfil público de cada técnico activo: `displayName` (nombre e inicial
+  del apellido), `verificationStatus`, `categories`, `professionalDescription`, `yearsOfExperience` y `city`. Los ids
+  que no son de un técnico activo se omiten. Nunca incluye correo, teléfono, documento ni el centro y el radio de la
+  zona. La usa ms-services para mostrarle al cliente quién se postuló a su solicitud. Misma clave interna.
 - `technicians.version` es un bloqueo optimista: una escritura sobre datos que otra solicitud ya modificó responde
   409 "Modificación concurrente" en vez de pisarla.
