@@ -362,6 +362,36 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /internal/technicians/public-profiles:
+    post:
+      summary: Consultar el perfil público de varios técnicos (GC-425, interna)
+      description: |
+        Ruta interna para otros microservicios (ms-services la usa al listar los postulantes de una solicitud);
+        Traefik y el Ingress no la exponen. Va bajo `/internal/**`, que protege la cabecera `X-Internal-Api-Key`.
+        Recibe hasta 100 `users.id` y responde, en el mismo orden y sin repetidos, el perfil público de cada técnico
+        con cuenta activa. Los ids que no son de un técnico activo (cliente, cuenta deshabilitada o inexistente) se
+        omiten en lugar de dar 404. Solo datos públicos: nunca correo, teléfono, documento, apellido completo ni el
+        centro y el radio de la zona de atención. No se debe cachear.
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicProfilesRequest'
+      responses:
+        '200':
+          description: Perfiles públicos de los técnicos activos consultados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicProfilesResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/users/service-categories:
     get:
       summary: Consultar el catálogo habilitado de especialidades y servicios (GC-322)
@@ -793,6 +823,38 @@ components:
                 items:
                   type: string
                   enum: [TECHNICIAN_NOT_FOUND, CATEGORY, ZONE, AVAILABILITY, VERIFICATION]
+
+    PublicProfilesRequest:
+      type: object
+      required: [userIds]
+      properties:
+        userIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { type: string, format: uuid }
+
+    PublicProfilesResponse:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicTechnicianProfile'
+
+    PublicTechnicianProfile:
+      type: object
+      description: Lo que el cliente ve de un prestador para compararlo (GC-425). Campos sin llenar llegan en null.
+      properties:
+        userId: { type: string, format: uuid }
+        displayName: { type: string, example: Carlos G., description: Nombre e inicial del apellido. }
+        verificationStatus: { $ref: '#/components/schemas/VerificationStatus' }
+        categories:
+          type: array
+          items: { $ref: '#/components/schemas/ServiceCategory' }
+        professionalDescription: { type: string, nullable: true }
+        yearsOfExperience: { type: integer, nullable: true }
+        city: { type: string, nullable: true, description: Ciudad de la zona de atención, sin coordenadas ni radio. }
 
     VerificationStatus:
       type: string
