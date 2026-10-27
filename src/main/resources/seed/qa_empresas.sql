@@ -1,6 +1,8 @@
--- Datos de QA para GC-466 (empresas y técnicos asociados). NO es una migración de producción: vive en db/seed y solo
--- se carga con el perfil `seed-qa` (ver application-seed-qa.yml). Es repetible e idempotente: cada fila se inserta solo
--- si su id (o, en usuarios, su correo o documento) todavía no existe, así que puede ejecutarse cuantas veces haga falta.
+-- Datos de QA para GC-466 (empresas y técnicos asociados). NO es una migración: queda fuera de las ubicaciones de Flyway
+-- a propósito, para no dejar huella en flyway_schema_history (una migración aplicada que luego no se encuentra impide
+-- arrancar). Solo lo ejecuta QaSeedLoader cuando el perfil `seed-qa` está activo, después de las migraciones. Es
+-- idempotente: cada fila se inserta solo si su id (o, en usuarios, su correo o documento) todavía no existe, así que
+-- puede ejecutarse cuantas veces haga falta.
 --
 -- Cuentas (todas con la contraseña de QA documentada en el README):
 --   empresa1@fixia-qa.test, empresa2@fixia-qa.test  -> empresas con 2 técnicos asociados cada una
