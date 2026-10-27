@@ -5,7 +5,7 @@ info:
   description: |
     Registro de clientes y técnicos, inicio y cierre de sesión, y perfil profesional del técnico
     (GC-234 / GC-235 / GC-236 / GC-237), especialidades y servicios ofrecidos por el técnico (GC-294), y su
-    disponibilidad y zona de atención (GC-295).
+    disponibilidad y zona de atención (GC-295), y la identidad de empresa con sus técnicos asociados (GC-466).
 
     Los errores usan RFC 7807 (`application/problem+json`). Todas las respuestas 401 son idénticas
     (cabecera `WWW-Authenticate: Bearer` y el mismo cuerpo) para no revelar el motivo del rechazo.
@@ -387,6 +387,99 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PublicProfilesResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users/companies/me:
+    get:
+      summary: Consultar la empresa del administrador autenticado (GC-466)
+      description: |
+        Solo con rol `COMPANY`. La empresa se resuelve siempre por la cuenta del token: la ruta no recibe ningún
+        identificador de empresa, así que una empresa no puede consultar otra. No hay registro público de empresas ni
+        ruta que asocie técnicos: las empresas y sus asociaciones se cargan de forma controlada (en QA, con el perfil
+        `seed-qa`).
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Datos de la empresa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La cuenta tiene rol `COMPANY` pero no administra ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/users/companies/me/technicians:
+    get:
+      summary: Listar los técnicos asociados a la empresa autenticada (GC-466)
+      description: |
+        Solo con rol `COMPANY`. Devuelve únicamente los técnicos asociados a la empresa del token, en el orden en que se
+        asociaron; una empresa sin técnicos recibe la lista vacía. Un técnico con cuenta deshabilitada, o cuya cuenta ya
+        no es de un técnico, no aparece. Mismos campos permitidos que el perfil público (GC-425): nunca correo,
+        teléfono, documento, apellido completo ni el centro y el radio de la zona. `userId` es el identificador con el
+        que ms-services recibe la postulación de la empresa (GC-468).
+
+        Qué se puede verificar con estos datos: estado de verificación, especialidades, experiencia y ciudad de
+        cobertura. La disponibilidad horaria y el círculo de cobertura existen en el perfil del técnico y los evalúa la
+        consulta de elegibilidad (`/internal/technicians/{userId}/eligibility`), no este listado.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Técnicos asociados a la empresa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyTechniciansResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La cuenta tiene rol `COMPANY` pero no administra ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /internal/companies/technician-association:
+    post:
+      summary: Consultar si un técnico pertenece a la empresa de un administrador (GC-466, interna)
+      description: |
+        Ruta interna para ms-services (GC-468 la usa al recibir la postulación de una empresa); Traefik y el Ingress no
+        la exponen. Va bajo `/internal/**`, que protege la cabecera `X-Internal-Api-Key`. Se pregunta por la cuenta del
+        administrador (`sub` del token que ms-services ya conoce), no por el id de la empresa.
+
+        Siempre responde 200 con la misma forma. `associated` es verdadero solo si ambas cuentas están activas, la del
+        administrador es de una empresa, la del técnico es de un técnico y están asociados; cualquier otro caso
+        (inexistente, deshabilitada, de otro rol o técnico de otra empresa) es falso sin revelar el motivo. No se debe
+        cachear.
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianAssociationRequest'
+      responses:
+        '200':
+          description: Resultado de la verificación.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianAssociationResponse'
         '400':
           $ref: '#/components/responses/ValidationError'
         '401':
@@ -855,6 +948,33 @@ components:
         professionalDescription: { type: string, nullable: true }
         yearsOfExperience: { type: integer, nullable: true }
         city: { type: string, nullable: true, description: Ciudad de la zona de atención, sin coordenadas ni radio. }
+
+    CompanyResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Servicios Integrales Andina }
+        nit: { type: string, nullable: true, description: Opcional; el MVP no lo valida. }
+
+    CompanyTechniciansResponse:
+      type: object
+      properties:
+        technicians:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicTechnicianProfile'
+
+    TechnicianAssociationRequest:
+      type: object
+      required: [companyAdminUserId, technicianUserId]
+      properties:
+        companyAdminUserId: { type: string, format: uuid, description: "`users.id` del administrador de la empresa." }
+        technicianUserId: { type: string, format: uuid, description: "`users.id` del técnico." }
+
+    TechnicianAssociationResponse:
+      type: object
+      properties:
+        associated: { type: boolean }
 
     VerificationStatus:
       type: string

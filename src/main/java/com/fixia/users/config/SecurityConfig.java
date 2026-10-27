@@ -70,6 +70,7 @@ public class SecurityConfig {
                                 "/api/users/auth/refresh").permitAll()
                         .requestMatchers("/api/users/clients/me/**").hasAuthority("ROLE_CLIENT")
                         .requestMatchers("/api/users/technicians/me/**").hasAuthority("ROLE_PROFESSIONAL")
+                        .requestMatchers("/api/users/companies/me/**").hasAuthority("ROLE_COMPANY")
                         .requestMatchers("/actuator/health/**", "/actuator/prometheus", "/actuator/metrics/**").permitAll()
                         .requestMatchers("/error").permitAll()
                         .anyRequest().authenticated())
