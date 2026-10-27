@@ -1,0 +1,7 @@
+# Datos de QA de empresas y técnicos asociados (GC-466). Se suma a otro perfil, nunca va solo y nunca se activa en
+# producción: carga además db/seed, que crea cuentas con una contraseña conocida.
+# Local:  mvn spring-boot:run -Dspring-boot.run.useTestClasspath=true -Dspring-boot.run.profiles=local,seed-qa
+# Docker: SPRING_PROFILES_ACTIVE=seed-qa en el servicio ms-users del entorno que lo necesite.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed
