@@ -23,6 +23,9 @@ mvn spring-boot:run -Dspring-boot.run.useTestClasspath=true -Dspring-boot.run.pr
 Usa H2 en memoria y un par de claves JWT efímero (los tokens dejan de valer al reiniciar).
 `useTestClasspath` es necesario porque H2 no viaja en el jar de producción.
 
+Para tener también las empresas y técnicos de QA (ver «Empresas»), sumar el perfil `seed-qa`:
+`-Dspring-boot.run.profiles=local,seed-qa`.
+
 ## Configuración
 
 | Variable | Descripción | Por defecto |
@@ -125,3 +128,40 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
   zona. La usa ms-services para mostrarle al cliente quién se postuló a su solicitud. Misma clave interna.
 - `technicians.version` es un bloqueo optimista: una escritura sobre datos que otra solicitud ya modificó responde
   409 "Modificación concurrente" en vez de pisarla.
+
+## Empresas
+
+Identidad empresarial y técnicos asociados (GC-466, historia GC-464).
+
+- **Identidad.** Una empresa es una cuenta con rol `COMPANY` (distinto de `ADMIN`, que queda para la plataforma) más una
+  fila en `companies` (`admin_user_id` único, nombre y NIT opcional). Usa el mismo inicio de sesión y el mismo token que
+  el resto de los roles. La empresa se resuelve siempre por el `sub` del token; ninguna ruta recibe un id de empresa.
+- **Asociaciones.** `company_technicians` une una empresa con la cuenta de un técnico existente. Un técnico solo puede
+  estar en **una** empresa (`uk_company_technicians_technician`) y debe tener perfil de técnico (clave foránea a
+  `technicians.user_id`). No hay indicador de habilitación: si la cuenta del técnico se deshabilita, deja de aparecer.
+- **No hay forma de asociar por API.** Sin registro público de empresas, sin invitaciones ni ruta que vincule por id; así
+  nadie reclama una cuenta ajena por conocer su id. Las empresas y asociaciones se cargan de forma controlada.
+- **API (GC-466).** `GET /api/users/companies/me` y `GET /api/users/companies/me/technicians`, solo con rol `COMPANY`
+  (cliente y técnico reciben 403). El listado devuelve los mismos campos permitidos del perfil público (GC-425) y su
+  `userId` es el que ms-services usa para postular y seleccionar al ejecutor; sin técnicos, lista vacía.
+- **Verificación para ms-services (GC-468).** `POST /internal/companies/technician-association` con
+  `{companyAdminUserId, technicianUserId}` responde `{associated: true|false}`. Siempre 200 y con la misma forma: ningún
+  motivo de «no» se distingue de otro. Misma clave interna. Este contrato está propuesto y debe acordarse con GC-468.
+- **Qué hay disponible para verificar elegibilidad.** Estado de verificación, especialidades, experiencia y ciudad en el
+  listado; disponibilidad y círculo de cobertura, en la consulta de elegibilidad por técnico. No se añaden reglas nuevas
+  de forma implícita.
+
+### Datos de QA (perfil `seed-qa`)
+
+`db/seed/R__qa_seed_empresas.sql` es una migración **repetible e idempotente** que solo se carga con el perfil `seed-qa`
+(`application-seed-qa.yml` suma `classpath:db/seed` a las ubicaciones de Flyway). Nunca se activa en producción: crea
+cuentas con una contraseña conocida. En Docker, `SPRING_PROFILES_ACTIVE=seed-qa` en el servicio `ms-users` del entorno.
+
+| Cuenta | Rol | Contenido |
+|---|---|---|
+| `empresa1@fixia-qa.test` | `COMPANY` | Servicios Integrales Andina: `tecnico1`, `tecnico2` |
+| `empresa2@fixia-qa.test` | `COMPANY` | Mantenimientos del Valle: `tecnico3`, `tecnico4` |
+| `empresa3@fixia-qa.test` | `COMPANY` | Hogar Experto, sin técnicos (lista vacía) |
+| `tecnico1..4@fixia-qa.test` | `PROFESSIONAL` | Verificados, con especialidades y ciudad de cobertura |
+
+Contraseña de todas las cuentas de QA: `FixiaQA#2026`.
