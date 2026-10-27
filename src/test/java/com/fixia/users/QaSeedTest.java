@@ -95,6 +95,19 @@ class QaSeedTest {
     }
 
     @Test
+    void elSeedNoDejaHuellaEnElHistorialDeFlyway() {
+        // Regresión: como migración repetible quedaba en flyway_schema_history y, al quitar el perfil, el servicio no
+        // arrancaba ("applied migration not resolved locally"). Solo deben figurar las migraciones versionadas.
+        // Una repetible es una migración SQL sin versión (la fila de creación del esquema es de otro tipo).
+        Integer repeatables = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM flyway_schema_history "
+                + "WHERE description LIKE '%seed%' OR (version IS NULL AND type = 'SQL')", Integer.class);
+        assertThat(repeatables).isZero();
+        Integer versioned = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM flyway_schema_history WHERE version IS NOT NULL", Integer.class);
+        assertThat(versioned).isEqualTo(8);
+    }
+
+    @Test
     void ejecutarElSeedOtraVezNoDuplicaNada() throws Exception {
         int users = count("users");
         int technicians = count("technicians");
@@ -106,7 +119,7 @@ class QaSeedTest {
         assertThat(companies).isEqualTo(3);
         assertThat(associations).isEqualTo(4);
 
-        new ResourceDatabasePopulator(new ClassPathResource("db/seed/R__qa_seed_empresas.sql")).execute(dataSource);
+        new ResourceDatabasePopulator(new ClassPathResource("seed/qa_empresas.sql")).execute(dataSource);
 
         assertThat(count("users")).isEqualTo(users);
         assertThat(count("technicians")).isEqualTo(technicians);
