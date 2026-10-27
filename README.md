@@ -153,9 +153,18 @@ Identidad empresarial y técnicos asociados (GC-466, historia GC-464).
 
 ### Datos de QA (perfil `seed-qa`)
 
-`db/seed/R__qa_seed_empresas.sql` es una migración **repetible e idempotente** que solo se carga con el perfil `seed-qa`
-(`application-seed-qa.yml` suma `classpath:db/seed` a las ubicaciones de Flyway). Nunca se activa en producción: crea
-cuentas con una contraseña conocida. En Docker, `SPRING_PROFILES_ACTIVE=seed-qa` en el servicio `ms-users` del entorno.
+`seed/qa_empresas.sql` es un script **idempotente** que carga `QaSeedLoader` al arrancar, solo con el perfil `seed-qa`
+y después de las migraciones. Nunca se activa en producción: crea cuentas con una contraseña conocida. En Docker,
+`SPRING_PROFILES_ACTIVE=seed-qa` en el servicio `ms-users` del entorno.
+
+- **No es una migración de Flyway** y no deja fila en `flyway_schema_history`. Por eso quitar el perfil es seguro: el
+  servicio arranca igual y las cuentas ya cargadas se conservan. (Una versión anterior lo cargaba como migración repetible;
+  eso impedía arrancar sin el perfil: «Detected applied migration not resolved locally».)
+- **Bases que ya aplicaron la versión anterior.** Si un entorno con PostgreSQL llegó a arrancar con `seed-qa` antes de este
+  cambio, `flyway_schema_history` conserva la fila `qa seed empresas` y el servicio no inicia hasta borrarla (una sola vez):
+  `DELETE FROM flyway_schema_history WHERE description = 'qa seed empresas';`. Las cuentas de QA no se tocan. Con H2 en
+  memoria (perfil `local`) no hay nada que limpiar.
+- Si una sentencia del script falla, se revierte todo y el servicio no arranca, en vez de dejar datos a medias.
 
 | Cuenta | Rol | Contenido |
 |---|---|---|
