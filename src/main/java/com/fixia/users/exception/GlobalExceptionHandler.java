@@ -64,6 +64,13 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(CompanyNotFoundException.class)
+    public ProblemDetail handleCompanyNotFound(CompanyNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Empresa no encontrada");
+        return problem;
+    }
+
     @ExceptionHandler({AccountAlreadyExistsException.class, DataIntegrityViolationException.class})
     public ProblemDetail handleConflict(RuntimeException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
