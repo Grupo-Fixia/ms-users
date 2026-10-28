@@ -1,5 +1,7 @@
 package com.fixia.users.controller;
 
+import com.fixia.users.dto.CompanyPublicProfilesRequest;
+import com.fixia.users.dto.CompanyPublicProfilesResponse;
 import com.fixia.users.dto.TechnicianAssociationRequest;
 import com.fixia.users.dto.TechnicianAssociationResponse;
 import com.fixia.users.service.CompanyService;
@@ -37,5 +39,17 @@ public class InternalCompanyController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(new TechnicianAssociationResponse(associated));
+    }
+
+    /**
+     * Nombre de varias empresas a la vez (GC-468), para que ms-services le muestre al cliente quién se postuló. Las
+     * cuentas que no son de una empresa activa se omiten en lugar de dar 404. No se cachea.
+     */
+    @PostMapping("/public-profiles")
+    public ResponseEntity<CompanyPublicProfilesResponse> publicProfiles(
+            @Valid @RequestBody CompanyPublicProfilesRequest request) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(companyService.publicProfiles(request.companyAdminUserIds()));
     }
 }

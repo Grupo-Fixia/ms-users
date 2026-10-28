@@ -5,6 +5,7 @@ import com.fixia.users.domain.CompanyTechnician;
 import com.fixia.users.domain.Role;
 import com.fixia.users.domain.User;
 import com.fixia.users.domain.UserStatus;
+import com.fixia.users.dto.CompanyPublicProfilesResponse;
 import com.fixia.users.dto.CompanyTechniciansResponse;
 import com.fixia.users.exception.CompanyNotFoundException;
 import com.fixia.users.repository.CompanyRepository;
@@ -14,9 +15,16 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * Identidad empresarial y técnicos asociados (GC-466). La empresa siempre se resuelve por la cuenta del token, nunca por
@@ -75,6 +83,29 @@ public class CompanyService {
         return company.isPresent()
                 && findActive(technicianUserId, Role.PROFESSIONAL).isPresent()
                 && associationRepository.existsByCompanyIdAndTechnicianUserId(company.get().getId(), technicianUserId);
+    }
+
+    /**
+     * Perfil público de varias empresas para ms-services (GC-468), que muestra al cliente quién se postuló. Una por cada
+     * cuenta activa con rol COMPANY y empresa cargada, en el orden pedido y sin repetidos; las demás se omiten sin error.
+     */
+    @Transactional(readOnly = true)
+    public CompanyPublicProfilesResponse publicProfiles(Collection<UUID> adminUserIds) {
+        List<UUID> ids = List.copyOf(new LinkedHashSet<>(adminUserIds));
+        Set<UUID> activeAdmins = userRepository.findAllById(ids).stream()
+                .filter(user -> user.getRole() == Role.COMPANY && user.getStatus() == UserStatus.ACTIVE)
+                .map(User::getId)
+                .collect(Collectors.toSet());
+        Map<UUID, Company> companies = companyRepository.findByAdminUserIdIn(activeAdmins).stream()
+                .collect(Collectors.toMap(Company::getAdminUserId, Function.identity()));
+        List<CompanyPublicProfilesResponse.Profile> profiles = new ArrayList<>();
+        for (UUID id : ids) {
+            Company company = companies.get(id);
+            if (company != null) {
+                profiles.add(new CompanyPublicProfilesResponse.Profile(id, company.getName()));
+            }
+        }
+        return new CompanyPublicProfilesResponse(profiles);
     }
 
     /**
