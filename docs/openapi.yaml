@@ -485,6 +485,35 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /internal/companies/public-profiles:
+    post:
+      summary: Consultar el nombre de varias empresas (GC-468, interna)
+      description: |
+        Ruta interna para ms-services, que muestra al cliente las empresas postuladas a su solicitud; Traefik y el
+        Ingress no la exponen. Va bajo `/internal/**` con `X-Internal-Api-Key`. Recibe hasta 100 cuentas de
+        administrador (`users.id`) y responde, en el mismo orden y sin repetidos, el nombre comercial de cada empresa
+        activa. Las cuentas que no son de una empresa activa se omiten. Nunca el NIT ni los datos de la cuenta. No se
+        debe cachear.
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyPublicProfilesRequest'
+      responses:
+        '200':
+          description: Nombre de las empresas activas consultadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyPublicProfilesResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/users/service-categories:
     get:
       summary: Consultar el catálogo habilitado de especialidades y servicios (GC-322)
@@ -975,6 +1004,27 @@ components:
       type: object
       properties:
         associated: { type: boolean }
+
+    CompanyPublicProfilesRequest:
+      type: object
+      required: [companyAdminUserIds]
+      properties:
+        companyAdminUserIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { type: string, format: uuid }
+
+    CompanyPublicProfilesResponse:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items:
+            type: object
+            properties:
+              companyAdminUserId: { type: string, format: uuid }
+              name: { type: string, example: Servicios Integrales Andina }
 
     VerificationStatus:
       type: string

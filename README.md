@@ -146,7 +146,12 @@ Identidad empresarial y técnicos asociados (GC-466, historia GC-464).
   `userId` es el que ms-services usa para postular y seleccionar al ejecutor; sin técnicos, lista vacía.
 - **Verificación para ms-services (GC-468).** `POST /internal/companies/technician-association` con
   `{companyAdminUserId, technicianUserId}` responde `{associated: true|false}`. Siempre 200 y con la misma forma: ningún
-  motivo de «no» se distingue de otro. Misma clave interna. Este contrato está propuesto y debe acordarse con GC-468.
+  motivo de «no» se distingue de otro. Misma clave interna. Lo usa ms-services al recibir la postulación de una
+  empresa (GC-468).
+- **Nombre de las empresas para ms-services (GC-468).** `POST /internal/companies/public-profiles` con
+  `{companyAdminUserIds}` (hasta 100) responde `{profiles: [{companyAdminUserId, name}]}`, en el orden pedido y sin
+  repetidos, solo para cuentas `COMPANY` activas con empresa cargada; las demás se omiten. Nunca el NIT ni los datos de
+  la cuenta. ms-services lo muestra como `provider` en los postulantes de una solicitud. Misma clave interna.
 - **Qué hay disponible para verificar elegibilidad.** Estado de verificación, especialidades, experiencia y ciudad en el
   listado; disponibilidad y círculo de cobertura, en la consulta de elegibilidad por técnico. No se añaden reglas nuevas
   de forma implícita.
