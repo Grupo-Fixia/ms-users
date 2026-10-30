@@ -152,6 +152,11 @@ Identidad empresarial y técnicos asociados (GC-466, historia GC-464).
   `{companyAdminUserIds}` (hasta 100) responde `{profiles: [{companyAdminUserId, name}]}`, en el orden pedido y sin
   repetidos, solo para cuentas `COMPANY` activas con empresa cargada; las demás se omiten. Nunca el NIT ni los datos de
   la cuenta. ms-services lo muestra como `provider` en los postulantes de una solicitud. Misma clave interna.
+- **Técnicos de la empresa para ms-services (GC-468).** `POST /internal/companies/technicians` con
+  `{companyAdminUserId}` responde `{technicianUserIds: [...]}`: los técnicos activos de esa empresa, en el orden en que
+  se asociaron. Si la cuenta no es de una empresa activa, o la empresa no tiene técnicos, la lista sale vacía y siempre
+  es 200. ms-services la usa para mostrarle a la empresa las solicitudes que puede atender y con cuál de sus técnicos
+  (`eligibleTechnicianIds`). Misma clave interna; no se cachea.
 - **Qué hay disponible para verificar elegibilidad.** Estado de verificación, especialidades, experiencia y ciudad en el
   listado; disponibilidad y círculo de cobertura, en la consulta de elegibilidad por técnico. No se añaden reglas nuevas
   de forma implícita.
