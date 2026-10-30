@@ -2,6 +2,8 @@ package com.fixia.users.controller;
 
 import com.fixia.users.dto.CompanyPublicProfilesRequest;
 import com.fixia.users.dto.CompanyPublicProfilesResponse;
+import com.fixia.users.dto.CompanyTechnicianIdsResponse;
+import com.fixia.users.dto.CompanyTechniciansQuery;
 import com.fixia.users.dto.TechnicianAssociationRequest;
 import com.fixia.users.dto.TechnicianAssociationResponse;
 import com.fixia.users.service.CompanyService;
@@ -39,6 +41,18 @@ public class InternalCompanyController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(new TechnicianAssociationResponse(associated));
+    }
+
+    /**
+     * Técnicos activos de la empresa que administra esta cuenta (GC-468), para que ms-services calcule qué solicitudes
+     * puede atender la empresa y con cuál de sus técnicos. Siempre 200: una cuenta que no es de una empresa activa
+     * responde lista vacía, igual que una empresa sin técnicos. No se cachea.
+     */
+    @PostMapping("/technicians")
+    public ResponseEntity<CompanyTechnicianIdsResponse> technicians(@Valid @RequestBody CompanyTechniciansQuery query) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(companyService.technicianIds(query.companyAdminUserId()));
     }
 
     /**
