@@ -6,6 +6,7 @@ import com.fixia.users.domain.Role;
 import com.fixia.users.domain.User;
 import com.fixia.users.domain.UserStatus;
 import com.fixia.users.dto.CompanyPublicProfilesResponse;
+import com.fixia.users.dto.CompanyTechnicianIdsResponse;
 import com.fixia.users.dto.CompanyTechniciansResponse;
 import com.fixia.users.exception.CompanyNotFoundException;
 import com.fixia.users.repository.CompanyRepository;
@@ -83,6 +84,29 @@ public class CompanyService {
         return company.isPresent()
                 && findActive(technicianUserId, Role.PROFESSIONAL).isPresent()
                 && associationRepository.existsByCompanyIdAndTechnicianUserId(company.get().getId(), technicianUserId);
+    }
+
+    /**
+     * Técnicos activos de una empresa para ms-services (GC-468), que con ellos calcula las oportunidades de la empresa.
+     * Solo si la cuenta es de una empresa activa; si no, lista vacía, igual que una empresa sin técnicos. Un técnico
+     * cuya cuenta ya no está activa no cuenta.
+     */
+    @Transactional(readOnly = true)
+    public CompanyTechnicianIdsResponse technicianIds(UUID adminUserId) {
+        Optional<Company> company = findActive(adminUserId, Role.COMPANY)
+                .flatMap(admin -> companyRepository.findByAdminUserId(admin.getId()));
+        if (company.isEmpty()) {
+            return new CompanyTechnicianIdsResponse(List.of());
+        }
+        List<UUID> associated = associationRepository.findByCompanyIdOrderByCreatedAtAscIdAsc(company.get().getId())
+                .stream()
+                .map(CompanyTechnician::getTechnicianUserId)
+                .toList();
+        Set<UUID> active = userRepository.findAllById(associated).stream()
+                .filter(user -> user.getRole() == Role.PROFESSIONAL && user.getStatus() == UserStatus.ACTIVE)
+                .map(User::getId)
+                .collect(Collectors.toSet());
+        return new CompanyTechnicianIdsResponse(associated.stream().filter(active::contains).toList());
     }
 
     /**

@@ -514,6 +514,35 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /internal/companies/technicians:
+    post:
+      summary: Consultar los técnicos activos de una empresa (GC-468, interna)
+      description: |
+        Ruta interna para ms-services, que con ella calcula las oportunidades de una empresa y qué técnico puede
+        proponer para cada una; Traefik y el Ingress no la exponen. Va bajo `/internal/**` con `X-Internal-Api-Key`.
+        Recibe la cuenta del administrador (`users.id`, el `sub` del token de la empresa) y responde los técnicos
+        activos asociados, en el orden en que se asociaron. Siempre 200: si la cuenta no es de una empresa activa o la
+        empresa no tiene técnicos, la lista sale vacía, sin distinguir un caso del otro. No se debe cachear.
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyTechniciansQuery'
+      responses:
+        '200':
+          description: Técnicos activos de la empresa; vacío si no aplica.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyTechnicianIdsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/users/service-categories:
     get:
       summary: Consultar el catálogo habilitado de especialidades y servicios (GC-322)
@@ -1025,6 +1054,19 @@ components:
             properties:
               companyAdminUserId: { type: string, format: uuid }
               name: { type: string, example: Servicios Integrales Andina }
+
+    CompanyTechniciansQuery:
+      type: object
+      required: [companyAdminUserId]
+      properties:
+        companyAdminUserId: { type: string, format: uuid }
+
+    CompanyTechnicianIdsResponse:
+      type: object
+      properties:
+        technicianUserIds:
+          type: array
+          items: { type: string, format: uuid }
 
     VerificationStatus:
       type: string
