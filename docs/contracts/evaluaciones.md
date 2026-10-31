@@ -17,7 +17,7 @@ Fuentes: SRS V6 (RF-051 a RF-056, RN-012, RN-017, CA-30, CA-31, §6.10), DD V4 (
 | D4 | **Una evaluación por servicio y dirección**, garantizada por la base | RN-012, RF-053. La restricción única resuelve también la concurrencia |
 | D5 | **Inmutables**: no se editan ni se borran en este sprint | DD V4 CD-08: «toda corrección es un evento nuevo». Corregir queda para cuando existan disputas |
 | D6 | Solo servicios con **técnico independiente**. Los servicios de una empresa no se evalúan | SRS V6 §6.10 y RN-017: el flujo empresarial termina en la selección (ALC-08) |
-| D7 | Plazo para evaluar: **30 días desde el cierre**, configurable | RF-053 pide «dentro del plazo configurado» |
+| D7 | Plazo para evaluar: **2 días desde el cierre**, configurable | RF-053 pide «dentro del plazo configurado»; los 2 días los decidió Tomás O. (2026-10-31) para que la evaluación se haga con el servicio reciente |
 | D8 | El hecho se publica como `evaluacion.registrada` desde un **Outbox propio de `ms-users`**, con la misma tabla que el de `ms-services` | RF-054 y SRS §6.10 (Outbox en la misma transacción). Misma forma para que el relay de GC-434 sirva para los dos |
 | D9 | Reputación: **calcular al consultar** a partir de las evaluaciones (recomendado); la proyección por eventos queda pendiente de aprobación | Ver sección 7. Sin copia que se desincronice (RF-054, CA-30) |
 
@@ -104,7 +104,7 @@ Pasos, en este orden:
 4. Reglas, con `reasons` en la respuesta **422**:
    - `SERVICE_NOT_CLOSED`: el estado no es `CLOSED`;
    - `COMPANY_SERVICE_NOT_EVALUABLE`: `providerType` es `COMPANY` (D6);
-   - `EVALUATION_WINDOW_EXPIRED`: pasaron más de `fixia.evaluations.window` (por defecto `P30D`, variable
+   - `EVALUATION_WINDOW_EXPIRED`: pasaron más de `fixia.evaluations.window` (por defecto `P2D`, variable
      `EVALUATIONS_WINDOW`) desde `closedAt` (D7).
 5. Guardar la evaluación y su evento en la **misma transacción** (sección 6).
 
