@@ -105,7 +105,8 @@ Pasos, en este orden:
    - `SERVICE_NOT_CLOSED`: el estado no es `CLOSED`;
    - `COMPANY_SERVICE_NOT_EVALUABLE`: `providerType` es `COMPANY` (D6);
    - `EVALUATION_WINDOW_EXPIRED`: pasaron más de `fixia.evaluations.window` (por defecto `P2D`, variable
-     `EVALUATIONS_WINDOW`) desde `closedAt` (D7).
+     `FIXIA_EVALUATIONS_WINDOW`) desde `closedAt` (D7);
+   - `EVALUATED_USER_NOT_FOUND`: la cuenta del evaluado ya no existe en `ms-users` (agregado en GC-444).
 5. Guardar la evaluación y su evento en la **misma transacción** (sección 6).
 
 Respuestas:
@@ -113,7 +114,7 @@ Respuestas:
 | Caso | Código | Cuerpo |
 | --- | --- | --- |
 | Creada | **201** | La evaluación (abajo) |
-| Repetida igual (mismo autor, servicio, nota y comentario) | **200** | La evaluación existente; no se publica otro evento |
+| Repetida igual (mismo autor, servicio, nota y comentario) | **200** | La evaluación existente; no se publica otro evento. Se responde así aunque ya haya vencido el plazo: es un reintento, no una evaluación nueva |
 | Ya existe otra distinta en esa dirección | **409** | `reasons: ["EVALUATION_ALREADY_EXISTS"]` |
 | Dos envíos a la vez | Uno gana (201); el otro choca con la restricción única, relee y responde 200 o 409 con la misma regla | |
 

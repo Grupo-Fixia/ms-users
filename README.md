@@ -131,6 +131,27 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
 - `technicians.version` es un bloqueo optimista: una escritura sobre datos que otra solicitud ya modificó responde
   409 "Modificación concurrente" en vez de pisarla.
 
+## Evaluaciones (GC-444)
+
+Contrato completo en [`docs/contracts/evaluaciones.md`](docs/contracts/evaluaciones.md) (GC-443).
+
+- `POST /api/users/evaluations` `{serviceRequestId, rating, comment}` para cliente y técnico (una empresa recibe 403).
+  La dirección y el evaluado se deducen del token y de la participación, que se pregunta a ms-services en
+  `GET /internal/services/{id}/participation` (nunca se lee su base).
+- Respuestas: 201 creada; 200 si es la misma evaluación otra vez (no se publica otro evento, aunque ya haya vencido el
+  plazo); 409 si ya hay otra distinta; 404 si el servicio no existe o quien llama no participó; 422 con `reasons`
+  (`SERVICE_NOT_CLOSED`, `COMPANY_SERVICE_NOT_EVALUABLE`, `EVALUATION_WINDOW_EXPIRED`, `EVALUATED_USER_NOT_FOUND`);
+  400 por datos inválidos (nota entera de 1 a 5, comentario hasta 500); 503 si ms-services no responde.
+- `GET /api/users/evaluations?serviceRequestIds=a,b` (de 1 a 50): las evaluaciones de esos servicios en las que quien
+  consulta evaluó o fue evaluado.
+- Tabla `service_evaluations` (V9), una por servicio y dirección; la base decide entre envíos simultáneos. Inmutables.
+- Cada evaluación nueva escribe `evaluacion.registrada` en la tabla `outbox_events` de este servicio (V9), en la misma
+  transacción, para el tópico `fixia.users.evaluations` con clave = evaluado. Esquema en [`docs/events`](docs/events/README.md).
+  Publicarlo es tarea del relay (GC-434).
+- Configuración, con valores por defecto que sirven en QA: `FIXIA_SERVICES_BASE_URL` (`http://ms-services:8080`),
+  `FIXIA_SERVICES_CONNECT_TIMEOUT` (`1s`), `FIXIA_SERVICES_READ_TIMEOUT` (`2s`) y `FIXIA_EVALUATIONS_WINDOW` (`P2D`,
+  plazo para evaluar desde el cierre). La clave interna es la misma `INTERNAL_API_KEY`.
+
 ## Empresas
 
 Identidad empresarial y técnicos asociados (GC-466, historia GC-464).
