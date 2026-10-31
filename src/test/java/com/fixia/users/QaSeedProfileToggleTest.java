@@ -45,7 +45,7 @@ class QaSeedProfileToggleTest {
             assertThat(count(withoutProfile, "users")).isEqualTo(7);
             assertThat(withoutProfile.getBean(JdbcTemplate.class).queryForObject(
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE version IS NOT NULL", Integer.class))
-                    .isEqualTo(8);
+                    .isEqualTo(QaSeedTest.versionedMigrations());
         }
 
         try (ConfigurableApplicationContext again = start("test", "seed-qa")) {

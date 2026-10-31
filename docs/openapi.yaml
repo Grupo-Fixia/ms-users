@@ -543,6 +543,104 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/users/evaluations:
+    post:
+      summary: Evaluar a la contraparte de un servicio cerrado (GC-444)
+      description: |
+        Para cliente (`ROLE_CLIENT`, evalúa al técnico) y técnico (`ROLE_PROFESSIONAL`, evalúa al cliente). La dirección y
+        el evaluado se deducen del token y de la participación que informa ms-services; el cuerpo no los trae. Una
+        evaluación por servicio y dirección, inmutable. Plazo: 2 días desde el cierre (configurable). Los servicios de una
+        empresa no se evalúan. Contrato: `docs/contracts/evaluaciones.md` (GC-443).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEvaluation'
+      responses:
+        '201':
+          description: Evaluación registrada; su evento `evaluacion.registrada` queda en el Outbox.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evaluation'
+        '200':
+          description: Es la misma evaluación que ya existía (reintento); no se registra ni se publica nada nuevo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evaluation'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: El servicio no existe o quien llama no participó en él (no se distingue).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Ya existe otra evaluación distinta en esa dirección (`reasons` = `EVALUATION_ALREADY_EXISTS`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
+        '422':
+          description: |
+            La evaluación no está permitida. `reasons`: `SERVICE_NOT_CLOSED`, `COMPANY_SERVICE_NOT_EVALUABLE`,
+            `EVALUATION_WINDOW_EXPIRED` o `EVALUATED_USER_NOT_FOUND`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
+        '503':
+          description: ms-services no respondió; no se guardó nada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    get:
+      summary: Consultar mis evaluaciones de varios servicios (GC-444)
+      description: |
+        Las evaluaciones de esos servicios en las que quien consulta evaluó o fue evaluado; las de servicios ajenos no
+        aparecen. Sirve al detalle de un servicio y al historial propio (GC-449). No consulta a ms-services.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: serviceRequestIds
+          in: query
+          required: true
+          description: De 1 a 50 ids de solicitud, separados por coma.
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 50
+            items: { type: string, format: uuid }
+          style: form
+          explode: false
+      responses:
+        '200':
+          description: Evaluaciones visibles para quien consulta (puede estar vacía).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationList'
+        '400':
+          description: Sin ids, más de 50 o un id mal formado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/users/service-categories:
     get:
       summary: Consultar el catálogo habilitado de especialidades y servicios (GC-322)
@@ -1054,6 +1152,43 @@ components:
             properties:
               companyAdminUserId: { type: string, format: uuid }
               name: { type: string, example: Servicios Integrales Andina }
+
+    CreateEvaluation:
+      type: object
+      required: [serviceRequestId, rating]
+      properties:
+        serviceRequestId: { type: string, format: uuid }
+        rating: { type: integer, minimum: 1, maximum: 5, description: 'Entero; 4.5 se rechaza.' }
+        comment: { type: string, maxLength: 500, nullable: true, description: 'Opcional; vacío se guarda como null.' }
+
+    Evaluation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        serviceRequestId: { type: string, format: uuid }
+        direction: { type: string, enum: [CLIENT_TO_PROVIDER, PROVIDER_TO_CLIENT] }
+        evaluatorId: { type: string, format: uuid }
+        evaluatedId: { type: string, format: uuid }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string, nullable: true, description: 'Solo lo ven el evaluador y el evaluado.' }
+        source: { type: string, enum: [CONFIRMED_CLOSURE] }
+        createdAt: { type: string, format: date-time }
+
+    EvaluationList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Evaluation' }
+
+    EvaluationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            reasons:
+              type: array
+              items: { type: string }
 
     CompanyTechniciansQuery:
       type: object
