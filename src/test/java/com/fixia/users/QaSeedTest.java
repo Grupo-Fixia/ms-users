@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -14,6 +15,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import javax.sql.DataSource;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -104,7 +107,7 @@ class QaSeedTest {
         assertThat(repeatables).isZero();
         Integer versioned = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM flyway_schema_history WHERE version IS NOT NULL", Integer.class);
-        assertThat(versioned).isEqualTo(8);
+        assertThat(versioned).isEqualTo(versionedMigrations()).isGreaterThanOrEqualTo(9);
     }
 
     @Test
@@ -126,5 +129,14 @@ class QaSeedTest {
         assertThat(count("technician_categories")).isEqualTo(categories);
         assertThat(count("companies")).isEqualTo(companies);
         assertThat(count("company_technicians")).isEqualTo(associations);
+    }
+
+    /** Migraciones versionadas del servicio: así la prueba no se rompe cada vez que se agrega una (GC-444). */
+    static int versionedMigrations() {
+        try {
+            return new PathMatchingResourcePatternResolver().getResources("classpath:db/migration/V*__*.sql").length;
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }
