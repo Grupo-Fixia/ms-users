@@ -3,7 +3,9 @@
 Registro de clientes y técnicos, inicio y cierre de sesión, y perfil profesional del técnico
 (GC-234 / GC-235 / GC-236 / GC-237). Java 21, Spring Boot 3.2, PostgreSQL.
 
-Contrato de la API: [`docs/openapi.yaml`](docs/openapi.yaml).
+Contrato de la API: [`docs/openapi.yaml`](docs/openapi.yaml). Evaluaciones y reputación (GC-443, se implementan en
+GC-444 y GC-446): [`docs/contracts/evaluaciones.md`](docs/contracts/evaluaciones.md), con su evento en
+[`docs/events`](docs/events/README.md).
 
 ## Pruebas
 
