@@ -399,8 +399,16 @@ paths:
         Ruta interna para ms-matching-geo; Traefik y el Ingress no la exponen. Va bajo `/internal/**`, que protege la
         cabecera `X-Internal-Api-Key`. Devuelve los técnicos con cuenta activa que ofrecen la categoría y cuya zona de
         atención es la ciudad indicada (sin distinguir mayúsculas, tildes ni espacios sobrantes), en orden estable por
-        `userId` y sin ranking. No filtra por círculo, disponibilidad ni verificación: el círculo viaja en `circle` para
-        que quien consulta lo aplique con las coordenadas de la solicitud.
+        `userId` y sin ranking. No filtra por círculo: el círculo viaja en `circle` para que quien consulta lo aplique con
+        las coordenadas de la solicitud.
+
+        **Disponibilidad (GC-474).** Si se envía `expectedAt`, solo se devuelven los técnicos con una franja semanal que
+        incluya ese instante en hora de Colombia (`America/Bogota`; inicio incluido, fin excluido), la misma regla de la
+        elegibilidad. Un técnico sin franjas declaradas no aparece cuando se envía `expectedAt`. Sin `expectedAt` no se
+        filtra por horario.
+
+        **Verificación (GC-474).** Solo se devuelven los técnicos con verificación vigente si
+        `fixia.eligibility.require-verified` está activo, el mismo flag de la elegibilidad (por defecto, no).
 
         **Paginación por cursor.** Una consulta revisa como máximo 500 técnicos, en lotes de 100. Si con eso no reúne
         `limit` resultados devuelve los que encontró y un `nextCursor` con la posición alcanzada; por eso una página
@@ -1150,6 +1158,14 @@ components:
         city: { type: string, maxLength: 100, example: Bogotá, description: Obligatoria; no puede estar en blanco. }
         limit: { type: integer, minimum: 1, maximum: 50, default: 20 }
         cursor: { type: string, nullable: true, description: El `nextCursor` de la página anterior; sin él se empieza desde el principio. }
+        expectedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-10-19T14:00:00Z'
+          description: |
+            Momento esperado de la solicitud (ISO-8601). Si viene, solo se devuelven los técnicos con una franja de
+            disponibilidad que lo incluya, en hora de Colombia. Sin él no se filtra por horario.
 
     TechnicianSearchResponse:
       type: object

@@ -2,6 +2,7 @@ package com.fixia.users.controller;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fixia.users.domain.AvailabilitySlot;
 import com.fixia.users.domain.CoverageZone;
 import com.fixia.users.domain.DocumentType;
 import com.fixia.users.domain.Role;
@@ -22,7 +23,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.DayOfWeek;
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -104,6 +107,28 @@ class InternalTechnicianSearchTest {
         data.put("limit", limit);
         data.put("cursor", cursor);
         return data;
+    }
+
+    /** Técnico de plomería en Bogotá con las franjas de disponibilidad indicadas. */
+    private UUID plumberWithSlots(AvailabilitySlot... slots) {
+        UUID userId = plumberIn("Bogotá");
+        transactionTemplate.executeWithoutResult(status -> technicianRepository.findByUserId(userId).orElseThrow()
+                .replaceAvailability(Set.of(slots), Instant.now()));
+        return userId;
+    }
+
+    private static AvailabilitySlot slot(DayOfWeek day, int fromHour, int toHour) {
+        return new AvailabilitySlot(day, LocalTime.of(fromHour, 0), LocalTime.of(toHour, 0));
+    }
+
+    private static Map<String, Object> bodyAt(String expectedAt) {
+        Map<String, Object> data = body("PLUMBING", "Bogotá", null, null);
+        data.put("expectedAt", expectedAt);
+        return data;
+    }
+
+    private List<String> idsAt(String expectedAt) throws Exception {
+        return userIds(search(bodyAt(expectedAt)).andExpect(status().isOk()));
     }
 
     private ResultActions search(Map<String, Object> body) throws Exception {
@@ -215,6 +240,96 @@ class InternalTechnicianSearchTest {
                 .andExpect(content().string(not(containsString("3104445566"))))
                 .andExpect(content().string(not(containsString("7980"))))
                 .andExpect(content().string(not(containsString("Gómez"))));
+    }
+
+    // ---------- Disponibilidad (GC-474) ----------
+
+    @Test
+    void conFechaEsperadaSoloDevuelveALosTecnicosConUnaFranjaQueLaIncluye() throws Exception {
+        UUID morning = plumberWithSlots(slot(DayOfWeek.MONDAY, 8, 12));
+        UUID afternoon = plumberWithSlots(slot(DayOfWeek.MONDAY, 14, 18));
+        plumberWithSlots(slot(DayOfWeek.TUESDAY, 8, 12));
+        plumberIn("Bogotá"); // sin franjas declaradas: nunca está disponible
+
+        // 2026-10-19 es lunes: 14:00Z son las 09:00 en Bogotá y 19:00Z las 14:00.
+        assertThat(idsAt(InternalTechnicianControllerTest.MONDAY_9AM)).containsExactly(morning.toString());
+        assertThat(idsAt("2026-10-19T19:00:00Z")).containsExactly(afternoon.toString());
+        assertThat(idsAt(InternalTechnicianControllerTest.MONDAY_6PM)).isEmpty();
+    }
+
+    @Test
+    void elInicioDeLaFranjaCuentaComoDentroYElFinComoFuera() throws Exception {
+        UUID morning = plumberWithSlots(slot(DayOfWeek.MONDAY, 8, 12));
+
+        assertThat(idsAt("2026-10-19T13:00:00Z")).containsExactly(morning.toString()); // 08:00 en Bogotá
+        assertThat(idsAt("2026-10-19T16:59:59Z")).containsExactly(morning.toString()); // 11:59:59
+        assertThat(idsAt("2026-10-19T17:00:00Z")).isEmpty(); // 12:00
+        assertThat(idsAt("2026-10-19T12:59:59Z")).isEmpty(); // 07:59:59
+    }
+
+    @Test
+    void elDiaSeTomaEnHoraDeColombiaNoEnUtc() throws Exception {
+        UUID mondayNight = plumberWithSlots(slot(DayOfWeek.MONDAY, 20, 23));
+        plumberWithSlots(slot(DayOfWeek.TUESDAY, 2, 5));
+
+        // 2026-10-20T03:00Z es martes en UTC, pero lunes 22:00 en Bogotá: gana el técnico del lunes por la noche.
+        assertThat(idsAt("2026-10-20T03:00:00Z")).containsExactly(mondayNight.toString());
+    }
+
+    @Test
+    void unDomingoSinFranjasEseDiaNoDevuelveNadie() throws Exception {
+        plumberWithSlots(slot(DayOfWeek.MONDAY, 8, 12), slot(DayOfWeek.SATURDAY, 8, 12));
+
+        assertThat(idsAt("2026-10-18T15:00:00Z")).isEmpty(); // domingo 10:00 en Bogotá
+    }
+
+    @Test
+    void unTecnicoConVariasFranjasDelMismoDiaApareceUnaSolaVez() throws Exception {
+        UUID both = plumberWithSlots(slot(DayOfWeek.MONDAY, 8, 12), slot(DayOfWeek.MONDAY, 13, 17));
+
+        assertThat(idsAt(InternalTechnicianControllerTest.MONDAY_9AM)).containsExactly(both.toString());
+        assertThat(idsAt("2026-10-19T19:00:00Z")).containsExactly(both.toString()); // 14:00, en la segunda franja
+    }
+
+    @Test
+    void sinFechaEsperadaNoSeFiltraPorHorario() throws Exception {
+        UUID withSlots = plumberWithSlots(slot(DayOfWeek.MONDAY, 8, 12));
+        UUID withoutSlots = plumberIn("Bogotá");
+
+        assertThat(userIds(search(body("PLUMBING", "Bogotá", 50, null)).andExpect(status().isOk())))
+                .containsExactlyInAnyOrder(withSlots.toString(), withoutSlots.toString());
+    }
+
+    @Test
+    void unaFechaEsperadaConFormatoInvalidoDa400() throws Exception {
+        search(bodyAt("ayer por la tarde")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void recorrerLasPaginasConElFiltroDeHorarioNoDuplicaNiOmiteTecnicos() throws Exception {
+        List<String> available = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            available.add(plumberWithSlots(slot(DayOfWeek.MONDAY, 8, 12)).toString());
+            plumberIn("Bogotá"); // sin franjas: intercalados para que el cursor tenga que saltarlos
+        }
+
+        List<String> all = idsAt(InternalTechnicianControllerTest.MONDAY_9AM);
+        assertThat(all).containsExactlyInAnyOrderElementsOf(available);
+
+        List<String> paged = new ArrayList<>();
+        String cursor = null;
+        int pages = 0;
+        do {
+            Map<String, Object> request = bodyAt(InternalTechnicianControllerTest.MONDAY_9AM);
+            request.put("limit", 2);
+            request.put("cursor", cursor);
+            JsonNode json = objectMapper.readTree(search(request).andReturn().getResponse().getContentAsString());
+            json.get("items").forEach(item -> paged.add(item.get("userId").asText()));
+            cursor = json.get("nextCursor").isNull() ? null : json.get("nextCursor").asText();
+            pages++;
+        } while (cursor != null && pages < 10);
+
+        assertThat(paged).containsExactlyElementsOf(all);
     }
 
     // ---------- Validación y seguridad ----------
