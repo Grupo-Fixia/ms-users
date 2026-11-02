@@ -128,6 +128,13 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
   del apellido), `verificationStatus`, `categories`, `professionalDescription`, `yearsOfExperience` y `city`. Los ids
   que no son de un técnico activo se omiten. Nunca incluye correo, teléfono, documento ni el centro y el radio de la
   zona. La usa ms-services para mostrarle al cliente quién se postuló a su solicitud. Misma clave interna.
+- **Búsqueda de técnicos para ms-matching-geo (GC-900):** `POST /internal/technicians/search` recibe
+  `{category, city, limit?, cursor?}` y responde `{items, nextCursor}` con los técnicos activos que ofrecen la categoría y
+  atienden la ciudad (sin distinguir mayúsculas ni tildes), en orden estable por `userId` y sin ranking. Cada ítem trae
+  `userId`, `displayName`, `categories`, `city` y `circle` (centro y radio, nulo si el técnico atiende toda la ciudad);
+  el filtro por círculo lo aplica ms-matching-geo. Una consulta revisa como máximo 500 técnicos: una página puede venir
+  corta con `nextCursor` no nulo y hay que seguir hasta que sea nulo. `circle` revela el domicilio aproximado, por eso solo
+  existe en esta ruta interna. Misma clave interna.
 - `technicians.version` es un bloqueo optimista: una escritura sobre datos que otra solicitud ya modificó responde
   409 "Modificación concurrente" en vez de pisarla.
 
