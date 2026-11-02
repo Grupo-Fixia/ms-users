@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.DayOfWeek;
+import java.time.LocalTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +32,12 @@ public interface TechnicianRepository extends JpaRepository<Technician, UUID> {
      * activa y son de rol PROFESSIONAL, con {@code userId} posterior a {@code after}, en orden de {@code userId}. No
      * trae colecciones (evita paginar en memoria); las categorías se cargan después con {@link #findByUserIdIn}. La
      * ciudad no se filtra aquí: su comparación ignora tildes y se hace en {@code CoverageZone#matchesCity}.
+     *
+     * <p>Dos filtros opcionales (GC-474), que se encienden con un booleano y no con un parámetro nulo, porque en
+     * PostgreSQL un parámetro nulo sin tipo falla. Con {@code filterByTime} solo pasan los técnicos con una franja que
+     * incluya {@code day} y {@code time} (hora de Colombia; inicio incluido, fin excluido, como
+     * {@code AvailabilitySlot#includes}); se hace aquí y no con {@code Technician#isAvailableAt} para no cargar las
+     * franjas de cada técnico revisado. Con {@code requireVerified} solo pasan los de verificación vigente.
      */
     @Query("""
             select t from Technician t
@@ -40,9 +48,17 @@ public interface TechnicianRepository extends JpaRepository<Technician, UUID> {
                           where u.id = t.userId
                             and u.status = com.fixia.users.domain.UserStatus.ACTIVE
                             and u.role = com.fixia.users.domain.Role.PROFESSIONAL)
+              and (:filterByTime = false
+                   or exists (select 1 from TechnicianAvailability a
+                              where a.technician = t and a.dayOfWeek = :day
+                                and a.startTime <= :time and a.endTime > :time))
+              and (:requireVerified = false
+                   or t.verificationStatus = com.fixia.users.domain.VerificationStatus.VALID)
             order by t.userId
             """)
     List<Technician> findSearchBatch(@Param("after") UUID after, @Param("category") ServiceCategory category,
+                                     @Param("filterByTime") boolean filterByTime, @Param("day") DayOfWeek day,
+                                     @Param("time") LocalTime time, @Param("requireVerified") boolean requireVerified,
                                      Pageable pageable);
 
     /**

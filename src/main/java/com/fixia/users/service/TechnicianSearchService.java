@@ -1,5 +1,6 @@
 package com.fixia.users.service;
 
+import com.fixia.users.domain.AvailabilitySlot;
 import com.fixia.users.domain.CoverageZone;
 import com.fixia.users.domain.Technician;
 import com.fixia.users.domain.User;
@@ -7,10 +8,15 @@ import com.fixia.users.dto.TechnicianSearchRequest;
 import com.fixia.users.dto.TechnicianSearchResponse;
 import com.fixia.users.repository.TechnicianRepository;
 import com.fixia.users.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
+import java.time.LocalTime;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +31,12 @@ import java.util.stream.Collectors;
  * <p>La categoría y el estado de la cuenta se filtran en la base; la ciudad se compara en Java con
  * {@link CoverageZone#matchesCity}, que ignora tildes y mayúsculas igual que la elegibilidad. El círculo de la zona
  * no filtra aquí: viaja en la respuesta para que ms-matching-geo lo aplique con las coordenadas de la solicitud.
+ *
+ * <p><b>Disponibilidad y verificación (GC-474).</b> Con {@code expectedAt} solo se devuelven los técnicos con una franja
+ * que incluya ese momento en hora de Colombia, la misma regla que la elegibilidad ({@link AvailabilitySlot#includes}):
+ * sin franjas declaradas, un técnico no aparece. La verificación vigente solo se exige si
+ * {@code fixia.eligibility.require-verified} está activo, el mismo flag de la elegibilidad (por defecto, no). Ambos
+ * filtros van en la consulta, no en Java, para no cargar las franjas de cada técnico revisado.
  *
  * <p><b>Paginación por cursor.</b> Igual que las oportunidades de ms-services (ADR-044), una consulta revisa como
  * máximo {@link #MAX_SCAN} técnicos, en lotes de {@link #BATCH_SIZE}. Si no reúne {@code limit} resultados devuelve los
@@ -42,16 +54,25 @@ public class TechnicianSearchService {
 
     private final TechnicianRepository technicianRepository;
     private final UserRepository userRepository;
+    private final boolean requireVerified;
 
-    public TechnicianSearchService(TechnicianRepository technicianRepository, UserRepository userRepository) {
+    public TechnicianSearchService(TechnicianRepository technicianRepository, UserRepository userRepository,
+                                   @Value("${fixia.eligibility.require-verified:false}") boolean requireVerified) {
         this.technicianRepository = technicianRepository;
         this.userRepository = userRepository;
+        this.requireVerified = requireVerified;
     }
 
     @Transactional(readOnly = true)
     public TechnicianSearchResponse search(TechnicianSearchRequest request) {
         int limit = request.effectiveLimit();
         UUID position = TechnicianSearchCursor.decode(request.cursor());
+
+        // Sin expectedAt no se filtra por horario; el día y la hora que se pasan entonces son de relleno y no se usan.
+        boolean filterByTime = request.expectedAt() != null;
+        ZonedDateTime local = filterByTime ? request.expectedAt().atZone(AvailabilitySlot.ZONE) : null;
+        DayOfWeek day = filterByTime ? local.getDayOfWeek() : DayOfWeek.MONDAY;
+        LocalTime time = filterByTime ? local.toLocalTime().truncatedTo(ChronoUnit.SECONDS) : LocalTime.MIDNIGHT;
 
         List<Technician> matches = new ArrayList<>();
         int scanned = 0;
@@ -60,7 +81,8 @@ public class TechnicianSearchService {
         scan:
         while (scanned < MAX_SCAN) {
             List<Technician> batch = technicianRepository.findSearchBatch(
-                    position, request.category(), PageRequest.of(0, BATCH_SIZE));
+                    position, request.category(), filterByTime, day, time, requireVerified,
+                    PageRequest.of(0, BATCH_SIZE));
             boolean lastBatch = batch.size() < BATCH_SIZE;
             for (int i = 0; i < batch.size(); i++) {
                 Technician technician = batch.get(i);
