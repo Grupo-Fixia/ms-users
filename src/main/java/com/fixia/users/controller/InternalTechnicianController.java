@@ -4,8 +4,11 @@ import com.fixia.users.dto.EligibilityRequest;
 import com.fixia.users.dto.EligibilityResponse;
 import com.fixia.users.dto.PublicProfilesRequest;
 import com.fixia.users.dto.PublicProfilesResponse;
+import com.fixia.users.dto.TechnicianSearchRequest;
+import com.fixia.users.dto.TechnicianSearchResponse;
 import com.fixia.users.service.TechnicianEligibilityService;
 import com.fixia.users.service.TechnicianPublicProfileService;
+import com.fixia.users.service.TechnicianSearchService;
 import jakarta.validation.Valid;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
@@ -30,11 +33,14 @@ public class InternalTechnicianController {
 
     private final TechnicianEligibilityService eligibilityService;
     private final TechnicianPublicProfileService publicProfileService;
+    private final TechnicianSearchService searchService;
 
     public InternalTechnicianController(TechnicianEligibilityService eligibilityService,
-                                        TechnicianPublicProfileService publicProfileService) {
+                                        TechnicianPublicProfileService publicProfileService,
+                                        TechnicianSearchService searchService) {
         this.eligibilityService = eligibilityService;
         this.publicProfileService = publicProfileService;
+        this.searchService = searchService;
     }
 
     /**
@@ -48,6 +54,18 @@ public class InternalTechnicianController {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(eligibilityService.evaluate(userId, request.requests()));
+    }
+
+    /**
+     * Técnicos que ofrecen una categoría y atienden una ciudad (GC-900), para ms-matching-geo. Devuelve el círculo de la
+     * zona de cada uno, que revela su domicilio aproximado: por eso solo existe aquí, bajo {@code /internal/**}, y
+     * quien lo consume no debe pasarlo a un cliente final. No se cachea: el técnico puede cambiar su zona.
+     */
+    @PostMapping("/search")
+    public ResponseEntity<TechnicianSearchResponse> search(@Valid @RequestBody TechnicianSearchRequest request) {
+        return ResponseEntity.ok()
+                .cacheControl(CacheControl.noStore())
+                .body(searchService.search(request));
     }
 
     /**
