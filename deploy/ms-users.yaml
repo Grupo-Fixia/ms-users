@@ -58,6 +58,8 @@ kind: Ingress
 metadata:
   name: ms-users
   namespace: apps
+  annotations:
+    traefik.ingress.kubernetes.io/router.priority: "10"
 spec:
   ingressClassName: traefik
   rules:
