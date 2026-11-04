@@ -36,5 +36,6 @@ por la API.
 ## Consumidores
 
 - `ms-intake-lakehouse` lo conserva como cualquier evento, bajo `producer=ms-users/type=evaluacion.registrada/v=1/`.
-- Reputación (GC-446): con la opción recomendada se calcula al consultar en `ms-users` y no consume el evento. Si se
-  aprueba una proyección (opción B), la deduplica por `eventId` y aprovecha que la clave del mensaje es el evaluado.
+- Reputación (GC-446): se calcula al consultar en `ms-users` (opción A, implementada) y no consume el evento. Si
+  algún día se aprueba una proyección (opción B), la deduplica por `eventId` y aprovecha que la clave del mensaje es
+  el evaluado.

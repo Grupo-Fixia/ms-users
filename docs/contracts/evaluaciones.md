@@ -19,7 +19,7 @@ Fuentes: SRS V6 (RF-051 a RF-056, RN-012, RN-017, CA-30, CA-31, §6.10), DD V4 (
 | D6 | Solo servicios con **técnico independiente**. Los servicios de una empresa no se evalúan | SRS V6 §6.10 y RN-017: el flujo empresarial termina en la selección (ALC-08) |
 | D7 | Plazo para evaluar: **2 días desde el cierre**, configurable | RF-053 pide «dentro del plazo configurado»; los 2 días los decidió Tomás O. (2026-10-31) para que la evaluación se haga con el servicio reciente |
 | D8 | El hecho se publica como `evaluacion.registrada` desde un **Outbox propio de `ms-users`**, con la misma tabla que el de `ms-services` | RF-054 y SRS §6.10 (Outbox en la misma transacción). Misma forma para que el relay de GC-434 sirva para los dos |
-| D9 | Reputación: **calcular al consultar** a partir de las evaluaciones (recomendado); la proyección por eventos queda pendiente de aprobación | Ver sección 7. Sin copia que se desincronice (RF-054, CA-30) |
+| D9 | Reputación: **calcular al consultar** a partir de las evaluaciones (opción A, **elegida e implementada en GC-446** el 2026-11-04) | Ver sección 7. Sin copia que se desincronice (RF-054, CA-30) |
 
 ## 2. Datos (`ms-users`, migración V9)
 
@@ -174,7 +174,11 @@ Esquemas en [`../events/`](../events/README.md). Resumen:
 - Solo se publica al crear. La repetición idéntica (200) no publica nada.
 - El lakehouse lo guarda como cualquier otro evento, bajo `producer=ms-users`.
 
-## 7. Reputación (GC-446, a cargo de Juan Pablo)
+## 7. Reputación (GC-446)
+
+> **Decisión (2026-11-04, Tomás Ospina, GC-446):** opción **A**. Implementada en `ReputationService` y expuesta en
+> `POST /internal/technicians/public-profiles` y `GET /api/users/technicians/me/profile` como
+> `reputation: {"average": 4.3, "count": 3}` o `null`. La opción B queda descartada para este sprint.
 
 Separado a propósito: el criterio de GC-443 pide señalar aparte cualquier destino de proyección que no esté aprobado.
 
@@ -224,7 +228,8 @@ cuentan, y si se elige la opción B: reentrega del mismo `eventId`, orden altera
 
 ## 10. Pendiente fuera de este contrato
 
-- Elegir entre las opciones A y B de la reputación (Juan Pablo, GC-446).
+- ~~Elegir entre las opciones A y B de la reputación (GC-446).~~ Opción A, implementada el 2026-11-04.
+- Que ms-services pase `reputation` en la respuesta de postulantes para que Flutter la muestre (GC-447).
 - Que el relay de GC-434 lea también el Outbox de `ms-users` y que el tópico `fixia.users.evaluations` exista en QA
   (DevOps, GC-418/456).
 - Plazo como parámetro versionado con vigencia (RNF-019): por ahora es configuración.
