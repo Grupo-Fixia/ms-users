@@ -17,6 +17,9 @@ public record PublicProfilesResponse(List<Profile> profiles) {
      * especialidades, descripción, experiencia y ciudad. Nunca correo, teléfono, documento ni el centro y el radio de
      * la zona de atención, que pueden revelar el domicilio. Los campos que el técnico no ha llenado llegan en
      * {@code null} (las especialidades, como lista vacía).
+     * <p>
+     * {@code reputation} (GC-446): promedio y número de las evaluaciones que le dieron sus clientes, o {@code null} si
+     * todavía no tiene. Nunca los comentarios ni quién evaluó.
      */
     public record Profile(
             UUID userId,
@@ -25,7 +28,8 @@ public record PublicProfilesResponse(List<Profile> profiles) {
             List<ServiceCategory> categories,
             String professionalDescription,
             Short yearsOfExperience,
-            String city
+            String city,
+            Reputation reputation
     ) {
     }
 }

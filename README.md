@@ -93,6 +93,7 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
   en la misma transacción. Pide los mismos datos y el mismo consentimiento que el registro de cliente.
 - `GET` / `PUT /api/users/technicians/me/profile` consultan y reemplazan la información profesional. Solo con rol
   `PROFESSIONAL`; el técnico siempre sale del token, así que nadie puede tocar el perfil de otro. Un cliente recibe 403.
+  Incluye `reputation`, la misma que ven los clientes (GC-446), o `null` si todavía no tiene evaluaciones.
 - `GET` / `PUT /api/users/technicians/me/categories` consultan y reemplazan solo las especialidades y servicios del
   técnico (RF-010), sin tocar el resto del perfil. `GET /api/users/service-categories` devuelve el catálogo habilitado
   a cualquier usuario autenticado.
@@ -125,9 +126,18 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
   `fixia.eligibility.require-verified=true` (por defecto `false`: aún no hay flujo de verificación, RN-001).
 - **Perfil público para otros servicios (GC-425):** `POST /internal/technicians/public-profiles` recibe hasta 100
   `userIds` y responde, en el mismo orden, el perfil público de cada técnico activo: `displayName` (nombre e inicial
-  del apellido), `verificationStatus`, `categories`, `professionalDescription`, `yearsOfExperience` y `city`. Los ids
+  del apellido), `verificationStatus`, `categories`, `professionalDescription`, `yearsOfExperience`, `city` y
+  `reputation` (GC-446: `{"average": 4.3, "count": 3}` o `null`, ver abajo). Los ids
   que no son de un técnico activo se omiten. Nunca incluye correo, teléfono, documento ni el centro y el radio de la
   zona. La usa ms-services para mostrarle al cliente quién se postuló a su solicitud. Misma clave interna.
+- **Reputación real (GC-446):** promedio y número de las evaluaciones `CLIENT_TO_PROVIDER` que recibió el técnico,
+  calculados **al consultar** sobre `service_evaluations` con una sola consulta agrupada por lote (índice
+  `(evaluated_id, direction)`). Promedio exacto redondeado a un decimal con la mitad hacia arriba (17/4 = 4,25 → 4,3).
+  Sin evaluaciones, `null`: nunca estrellas inventadas. No hay tabla de reputación ni consumidor del evento: no hay
+  copia que deduplicar ni reconstruir, y como cada evaluación es única por servicio y dirección e inmutable, el conteo
+  no se puede inflar. Nunca expone comentarios ni quién evaluó. La del cliente (`PROVIDER_TO_CLIENT`) se calcula con la
+  misma regla (`ReputationService.asClient`) pero no se muestra en este sprint. Decisión: opción A del contrato
+  [`docs/contracts/evaluaciones.md`](docs/contracts/evaluaciones.md) §7.
 - **Búsqueda de técnicos para ms-matching-geo (GC-900):** `POST /internal/technicians/search` recibe
   `{category, city, limit?, cursor?}` y responde `{items, nextCursor}` con los técnicos activos que ofrecen la categoría y
   atienden la ciudad (sin distinguir mayúsculas ni tildes), en orden estable por `userId` y sin ranking. Cada ítem trae
