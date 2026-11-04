@@ -1,6 +1,7 @@
 package com.fixia.users.exception;
 
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -63,11 +64,47 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(CompanyNotFoundException.class)
+    public ProblemDetail handleCompanyNotFound(CompanyNotFoundException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setTitle("Empresa no encontrada");
+        return problem;
+    }
+
     @ExceptionHandler({AccountAlreadyExistsException.class, DataIntegrityViolationException.class})
     public ProblemDetail handleConflict(RuntimeException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.CONFLICT, "Ya existe una cuenta registrada con los datos proporcionados");
         problem.setTitle("Cuenta existente");
+        return problem;
+    }
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ProblemDetail handleConcurrentUpdate(OptimisticLockingFailureException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.CONFLICT, "Los datos fueron modificados por otra solicitud. Consúltelos e intente de nuevo");
+        problem.setTitle("Modificación concurrente");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidTechnicianDataException.class)
+    public ProblemDetail handleInvalidTechnicianData(InvalidTechnicianDataException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setTitle("Datos inválidos");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidSearchCursorException.class)
+    public ProblemDetail handleInvalidSearchCursor(InvalidSearchCursorException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setTitle("Datos inválidos");
+        return problem;
+    }
+
+    @ExceptionHandler(InvalidClientDataException.class)
+    public ProblemDetail handleInvalidClientData(InvalidClientDataException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problem.setTitle("Datos inválidos");
         return problem;
     }
 }

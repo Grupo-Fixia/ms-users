@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -58,6 +59,11 @@ class TechnicianRepositoryTest {
     private void updateProfile(UUID userId, String description, int years, Set<ServiceCategory> categories) {
         transactionTemplate.executeWithoutResult(status -> technicianRepository.findByUserId(userId).orElseThrow()
                 .updateProfile(description, (short) years, categories, Instant.now()));
+    }
+
+    private void replaceCategories(UUID userId, Set<ServiceCategory> categories) {
+        transactionTemplate.executeWithoutResult(status -> technicianRepository.findByUserId(userId).orElseThrow()
+                .replaceCategories(categories, Instant.now()));
     }
 
     private int storedCategoryRows() {
@@ -113,6 +119,82 @@ class TechnicianRepositoryTest {
 
         assertThatThrownBy(() -> jdbcTemplate.update(insert, UUID.randomUUID(), technicianId))
                 .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void reemplazaLasEspecialidadesSinTocarLaInformacionProfesional() {
+        UUID userId = createTechnician();
+        updateProfile(userId, "Plomero residencial", 8, Set.of(ServiceCategory.PLUMBING, ServiceCategory.MAINTENANCE));
+
+        replaceCategories(userId, Set.of(ServiceCategory.PLUMBING, ServiceCategory.CARPENTRY));
+
+        Technician stored = technicianRepository.findByUserId(userId).orElseThrow();
+        assertThat(stored.getCategories()).containsExactlyInAnyOrder(ServiceCategory.PLUMBING, ServiceCategory.CARPENTRY);
+        assertThat(stored.getProfessionalDescription()).isEqualTo("Plomero residencial");
+        assertThat(stored.getYearsOfExperience()).isEqualTo((short) 8);
+        assertThat(storedCategoryRows()).isEqualTo(2);
+    }
+
+    @Test
+    void unTecnicoSinInformacionProfesionalPuedeDeclararYRetirarEspecialidades() {
+        UUID userId = createTechnician();
+
+        replaceCategories(userId, Set.of(ServiceCategory.ELECTRICAL));
+        assertThat(technicianRepository.findByUserId(userId).orElseThrow().getCategories())
+                .containsExactly(ServiceCategory.ELECTRICAL);
+
+        replaceCategories(userId, Set.of());
+        Technician stored = technicianRepository.findByUserId(userId).orElseThrow();
+        assertThat(stored.getCategories()).isEmpty();
+        assertThat(stored.getProfessionalDescription()).isNull();
+        assertThat(storedCategoryRows()).isZero();
+    }
+
+    @Test
+    void laBaseAceptaTodasLasCategoriasDelCatalogo() {
+        UUID userId = createTechnician();
+
+        replaceCategories(userId, Set.of(ServiceCategory.values()));
+
+        assertThat(storedCategoryRows()).isEqualTo(ServiceCategory.values().length);
+    }
+
+    @Test
+    void laBaseRechazaUnaCategoriaFueraDelCatalogo() {
+        UUID userId = createTechnician();
+        UUID technicianId = technicianRepository.findByUserId(userId).orElseThrow().getId();
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO technician_categories (id, technician_id, category) VALUES (?, ?, 'GARDENING')",
+                UUID.randomUUID(), technicianId))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(storedCategoryRows()).isZero();
+    }
+
+    @Test
+    void cadaCambioDelPerfilAvanzaLaVersion() {
+        UUID userId = createTechnician();
+        long initial = technicianRepository.findByUserId(userId).orElseThrow().getVersion();
+
+        replaceCategories(userId, Set.of(ServiceCategory.PLUMBING));
+
+        assertThat(technicianRepository.findByUserId(userId).orElseThrow().getVersion()).isEqualTo(initial + 1);
+    }
+
+    @Test
+    void unaEscrituraSobreDatosDesactualizadosSeRechazaYNoPisaLaAnterior() {
+        UUID userId = createTechnician();
+        Technician first = technicianRepository.findByUserId(userId).orElseThrow();
+        Technician stale = technicianRepository.findByUserId(userId).orElseThrow();
+
+        first.replaceCategories(Set.of(ServiceCategory.PLUMBING), Instant.now());
+        technicianRepository.saveAndFlush(first);
+
+        stale.replaceCategories(Set.of(ServiceCategory.PAINTING), Instant.now());
+        assertThatThrownBy(() -> technicianRepository.saveAndFlush(stale))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+        assertThat(technicianRepository.findByUserId(userId).orElseThrow().getCategories())
+                .containsExactly(ServiceCategory.PLUMBING);
     }
 
     @Test

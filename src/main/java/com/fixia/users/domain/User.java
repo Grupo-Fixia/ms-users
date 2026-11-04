@@ -16,6 +16,12 @@ import java.util.UUID;
 @Table(name = "users")
 public class User {
 
+    public static final int NAME_MAX_LENGTH = 100;
+    public static final int PHONE_MAX_LENGTH = 20;
+
+    /** Teléfono en formato internacional opcional (+57...), solo dígitos, entre 7 y 15. */
+    public static final String PHONE_REGEX = "^\\+?[0-9]{7,15}$";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -81,6 +87,38 @@ public class User {
 
     public void disable() {
         this.status = UserStatus.DISABLED;
+    }
+
+    /**
+     * Actualiza los datos personales y de contacto que el titular puede editar (GC-293): nombre, apellido y
+     * teléfono. No toca la identidad ni las credenciales: el correo es el login, el documento es la identidad
+     * única de la cuenta, y el rol, el estado, la contraseña y el consentimiento tienen sus propios flujos.
+     * Los valores se guardan sin espacios al inicio ni al final.
+     *
+     * @throws IllegalArgumentException si algún dato falta o no cumple el formato; la cuenta queda sin cambios
+     */
+    public void updateContactInfo(String firstName, String lastName, String phone) {
+        String newFirstName = requireText(firstName, "El nombre", NAME_MAX_LENGTH);
+        String newLastName = requireText(lastName, "El apellido", NAME_MAX_LENGTH);
+        String newPhone = requireText(phone, "El teléfono", PHONE_MAX_LENGTH);
+        if (!newPhone.matches(PHONE_REGEX)) {
+            throw new IllegalArgumentException("El teléfono no es válido");
+        }
+        // Se asigna al final: si algún dato es inválido, la cuenta no queda a medio actualizar.
+        this.firstName = newFirstName;
+        this.lastName = newLastName;
+        this.phone = newPhone;
+    }
+
+    private static String requireText(String value, String label, int maxLength) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(label + " es obligatorio");
+        }
+        String stripped = value.strip();
+        if (stripped.length() > maxLength) {
+            throw new IllegalArgumentException(label + " no puede superar " + maxLength + " caracteres");
+        }
+        return stripped;
     }
 
     public UUID getId() {

@@ -4,7 +4,8 @@ info:
   version: 0.0.1
   description: |
     Registro de clientes y técnicos, inicio y cierre de sesión, y perfil profesional del técnico
-    (GC-234 / GC-235 / GC-236 / GC-237).
+    (GC-234 / GC-235 / GC-236 / GC-237), especialidades y servicios ofrecidos por el técnico (GC-294), y su
+    disponibilidad y zona de atención (GC-295), y la identidad de empresa con sus técnicos asociados (GC-466).
 
     Los errores usan RFC 7807 (`application/problem+json`). Todas las respuestas 401 son idénticas
     (cabecera `WWW-Authenticate: Bearer` y el mismo cuerpo) para no revelar el motivo del rechazo.
@@ -44,6 +45,55 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+
+  /api/users/clients/me/profile:
+    get:
+      summary: Consultar el perfil del cliente autenticado (GC-317)
+      description: |
+        Datos de la cuenta del cliente. El cliente se toma del token, nunca de la petición, por lo que nadie puede
+        consultar el perfil de otro cliente. No incluye la contraseña, el rol, el estado ni el consentimiento.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Perfil del cliente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    put:
+      summary: Actualizar el perfil del cliente autenticado (GC-317)
+      description: |
+        Reemplaza nombre, apellido y teléfono con las mismas reglas que el registro: se eliminan los espacios al inicio y
+        al final del nombre y del apellido; el teléfono debe venir sin espacios. El correo (es el login)
+        y el documento (identidad única) son de solo lectura, y el rol y el estado no se editan aquí: cualquier otro
+        campo del cuerpo se ignora. Si algún dato es inválido no se cambia nada. Los cambios se ven de inmediato al
+        volver a consultar el perfil.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientProfileRequest'
+      responses:
+        '200':
+          description: Perfil actualizado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientProfile'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   /api/users/technicians:
     post:
@@ -120,6 +170,539 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/TechnicianProfileNotFound'
+
+  /api/users/technicians/me/categories:
+    get:
+      summary: Consultar las especialidades y servicios del técnico autenticado (GC-322)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Categorías seleccionadas; lista vacía si el técnico aún no ha seleccionado ninguna.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianCategories'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+    put:
+      summary: Seleccionar o actualizar las especialidades y servicios del técnico autenticado (GC-322)
+      description: |
+        Reemplaza por completo las categorías seleccionadas, sin tocar el resto del perfil profesional. Solo se
+        aceptan valores del catálogo (`GET /api/users/service-categories`); una lista vacía las retira todas. El
+        técnico se toma del token, nunca de la petición. Las actualizaciones simultáneas del mismo técnico se
+        aplican una tras otra: prevalece la última.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianCategoriesRequest'
+      responses:
+        '200':
+          description: Categorías actualizadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianCategories'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+
+  /api/users/technicians/me/coverage-zone:
+    get:
+      summary: Consultar la zona de atención del técnico autenticado (GC-327)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Zona actual; todos sus campos son null mientras el técnico no la declare.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageZone'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+    put:
+      summary: Declarar o reemplazar la zona de atención del técnico autenticado (GC-327)
+      description: |
+        Ciudad obligatoria y, si se quiere precisar, un círculo: latitud, longitud y radio van juntos o se omiten los
+        tres. Las coordenadas se guardan con dos decimales (~1 km), igual que la ubicación aproximada de una solicitud
+        en ms-services. El técnico se toma del token.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CoverageZoneRequest'
+      responses:
+        '200':
+          description: Zona actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageZone'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+    delete:
+      summary: Retirar la zona de atención del técnico autenticado (GC-327)
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Zona retirada.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+
+  /api/users/technicians/me/availability:
+    get:
+      summary: Consultar la disponibilidad semanal del técnico autenticado (GC-327)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Franjas ordenadas por día y hora de inicio; lista vacía si no hay ninguna.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+    put:
+      summary: Reemplazar la disponibilidad semanal del técnico autenticado (GC-327)
+      description: |
+        Reemplaza todas las franjas; una lista vacía las retira. Las horas son de Colombia (America/Bogota), van como
+        "HH:mm" y se guardan al minuto. Las franjas no pueden cruzarse; dos seguidas (08:00-12:00 y 12:00-14:00) sí
+        valen. Las actualizaciones simultáneas del mismo técnico se aplican una tras otra.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AvailabilityRequest'
+      responses:
+        '200':
+          description: Disponibilidad actualizada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Availability'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/TechnicianProfileNotFound'
+
+  /internal/technicians/{userId}/eligibility:
+    post:
+      summary: Evaluar si un técnico es elegible para una o varias solicitudes (GC-342, interna)
+      description: |
+        Ruta interna para otros microservicios (ms-services); Traefik y el Ingress no la exponen. Va bajo
+        `/internal/**`, que protege la cabecera `X-Internal-Api-Key` (GC-333). `userId` es el `users.id` del
+        técnico. Un técnico es elegible si la categoría está entre sus especialidades, su zona cubre la ubicación
+        aproximada y el momento esperado cae en alguna de sus franjas (hora de Colombia). La verificación vigente
+        solo se exige si `fixia.eligibility.require-verified` está activo. Un técnico inexistente o deshabilitado no
+        da 404: cada resultado sale no elegible con `TECHNICIAN_NOT_FOUND`. No se debe cachear.
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EligibilityRequest'
+      responses:
+        '200':
+          description: Un resultado por solicitud, en el mismo orden.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EligibilityResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /internal/technicians/public-profiles:
+    post:
+      summary: Consultar el perfil público de varios técnicos (GC-425, interna)
+      description: |
+        Ruta interna para otros microservicios (ms-services la usa al listar los postulantes de una solicitud);
+        Traefik y el Ingress no la exponen. Va bajo `/internal/**`, que protege la cabecera `X-Internal-Api-Key`.
+        Recibe hasta 100 `users.id` y responde, en el mismo orden y sin repetidos, el perfil público de cada técnico
+        con cuenta activa. Los ids que no son de un técnico activo (cliente, cuenta deshabilitada o inexistente) se
+        omiten en lugar de dar 404. Solo datos públicos: nunca correo, teléfono, documento, apellido completo ni el
+        centro y el radio de la zona de atención. No se debe cachear.
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicProfilesRequest'
+      responses:
+        '200':
+          description: Perfiles públicos de los técnicos activos consultados.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PublicProfilesResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /internal/technicians/search:
+    post:
+      summary: Buscar técnicos por categoría y ciudad (GC-900, interna)
+      description: |
+        Ruta interna para ms-matching-geo; Traefik y el Ingress no la exponen. Va bajo `/internal/**`, que protege la
+        cabecera `X-Internal-Api-Key`. Devuelve los técnicos con cuenta activa que ofrecen la categoría y cuya zona de
+        atención es la ciudad indicada (sin distinguir mayúsculas, tildes ni espacios sobrantes), en orden estable por
+        `userId` y sin ranking. No filtra por círculo: el círculo viaja en `circle` para que quien consulta lo aplique con
+        las coordenadas de la solicitud.
+
+        **Disponibilidad (GC-474).** Si se envía `expectedAt`, solo se devuelven los técnicos con una franja semanal que
+        incluya ese instante en hora de Colombia (`America/Bogota`; inicio incluido, fin excluido), la misma regla de la
+        elegibilidad. Un técnico sin franjas declaradas no aparece cuando se envía `expectedAt`. Sin `expectedAt` no se
+        filtra por horario.
+
+        **Verificación (GC-474).** Solo se devuelven los técnicos con verificación vigente si
+        `fixia.eligibility.require-verified` está activo, el mismo flag de la elegibilidad (por defecto, no).
+
+        **Paginación por cursor.** Una consulta revisa como máximo 500 técnicos, en lotes de 100. Si con eso no reúne
+        `limit` resultados devuelve los que encontró y un `nextCursor` con la posición alcanzada; por eso una página
+        puede venir corta, o vacía, con cursor no nulo, y hay que seguir pidiendo hasta que `nextCursor` sea nulo.
+        El cursor es opaco; uno que este servicio no emitió da 400.
+
+        `circle` revela el domicilio aproximado del técnico: nunca debe llegar a un cliente final. Correo, teléfono y
+        documento no viajan. No se debe cachear.
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianSearchRequest'
+      responses:
+        '200':
+          description: Una página de técnicos compatibles con la categoría y la ciudad.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianSearchResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users/companies/me:
+    get:
+      summary: Consultar la empresa del administrador autenticado (GC-466)
+      description: |
+        Solo con rol `COMPANY`. La empresa se resuelve siempre por la cuenta del token: la ruta no recibe ningún
+        identificador de empresa, así que una empresa no puede consultar otra. No hay registro público de empresas ni
+        ruta que asocie técnicos: las empresas y sus asociaciones se cargan de forma controlada (en QA, con el perfil
+        `seed-qa`).
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Datos de la empresa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La cuenta tiene rol `COMPANY` pero no administra ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/users/companies/me/technicians:
+    get:
+      summary: Listar los técnicos asociados a la empresa autenticada (GC-466)
+      description: |
+        Solo con rol `COMPANY`. Devuelve únicamente los técnicos asociados a la empresa del token, en el orden en que se
+        asociaron; una empresa sin técnicos recibe la lista vacía. Un técnico con cuenta deshabilitada, o cuya cuenta ya
+        no es de un técnico, no aparece. Mismos campos permitidos que el perfil público (GC-425): nunca correo,
+        teléfono, documento, apellido completo ni el centro y el radio de la zona. `userId` es el identificador con el
+        que ms-services recibe la postulación de la empresa (GC-468).
+
+        Qué se puede verificar con estos datos: estado de verificación, especialidades, experiencia y ciudad de
+        cobertura. La disponibilidad horaria y el círculo de cobertura existen en el perfil del técnico y los evalúa la
+        consulta de elegibilidad (`/internal/technicians/{userId}/eligibility`), no este listado.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Técnicos asociados a la empresa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyTechniciansResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La cuenta tiene rol `COMPANY` pero no administra ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /internal/companies/technician-association:
+    post:
+      summary: Consultar si un técnico pertenece a la empresa de un administrador (GC-466, interna)
+      description: |
+        Ruta interna para ms-services (GC-468 la usa al recibir la postulación de una empresa); Traefik y el Ingress no
+        la exponen. Va bajo `/internal/**`, que protege la cabecera `X-Internal-Api-Key`. Se pregunta por la cuenta del
+        administrador (`sub` del token que ms-services ya conoce), no por el id de la empresa.
+
+        Siempre responde 200 con la misma forma. `associated` es verdadero solo si ambas cuentas están activas, la del
+        administrador es de una empresa, la del técnico es de un técnico y están asociados; cualquier otro caso
+        (inexistente, deshabilitada, de otro rol o técnico de otra empresa) es falso sin revelar el motivo. No se debe
+        cachear.
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianAssociationRequest'
+      responses:
+        '200':
+          description: Resultado de la verificación.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianAssociationResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /internal/companies/public-profiles:
+    post:
+      summary: Consultar el nombre de varias empresas (GC-468, interna)
+      description: |
+        Ruta interna para ms-services, que muestra al cliente las empresas postuladas a su solicitud; Traefik y el
+        Ingress no la exponen. Va bajo `/internal/**` con `X-Internal-Api-Key`. Recibe hasta 100 cuentas de
+        administrador (`users.id`) y responde, en el mismo orden y sin repetidos, el nombre comercial de cada empresa
+        activa. Las cuentas que no son de una empresa activa se omiten. Nunca el NIT ni los datos de la cuenta. No se
+        debe cachear.
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyPublicProfilesRequest'
+      responses:
+        '200':
+          description: Nombre de las empresas activas consultadas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyPublicProfilesResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /internal/companies/technicians:
+    post:
+      summary: Consultar los técnicos activos de una empresa (GC-468, interna)
+      description: |
+        Ruta interna para ms-services, que con ella calcula las oportunidades de una empresa y qué técnico puede
+        proponer para cada una; Traefik y el Ingress no la exponen. Va bajo `/internal/**` con `X-Internal-Api-Key`.
+        Recibe la cuenta del administrador (`users.id`, el `sub` del token de la empresa) y responde los técnicos
+        activos asociados, en el orden en que se asociaron. Siempre 200: si la cuenta no es de una empresa activa o la
+        empresa no tiene técnicos, la lista sale vacía, sin distinguir un caso del otro. No se debe cachear.
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyTechniciansQuery'
+      responses:
+        '200':
+          description: Técnicos activos de la empresa; vacío si no aplica.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyTechnicianIdsResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/users/evaluations:
+    post:
+      summary: Evaluar a la contraparte de un servicio cerrado (GC-444)
+      description: |
+        Para cliente (`ROLE_CLIENT`, evalúa al técnico) y técnico (`ROLE_PROFESSIONAL`, evalúa al cliente). La dirección y
+        el evaluado se deducen del token y de la participación que informa ms-services; el cuerpo no los trae. Una
+        evaluación por servicio y dirección, inmutable. Plazo: 2 días desde el cierre (configurable). Los servicios de una
+        empresa no se evalúan. Contrato: `docs/contracts/evaluaciones.md` (GC-443).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEvaluation'
+      responses:
+        '201':
+          description: Evaluación registrada; su evento `evaluacion.registrada` queda en el Outbox.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evaluation'
+        '200':
+          description: Es la misma evaluación que ya existía (reintento); no se registra ni se publica nada nuevo.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Evaluation'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: El servicio no existe o quien llama no participó en él (no se distingue).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Ya existe otra evaluación distinta en esa dirección (`reasons` = `EVALUATION_ALREADY_EXISTS`).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
+        '422':
+          description: |
+            La evaluación no está permitida. `reasons`: `SERVICE_NOT_CLOSED`, `COMPANY_SERVICE_NOT_EVALUABLE`,
+            `EVALUATION_WINDOW_EXPIRED` o `EVALUATED_USER_NOT_FOUND`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
+        '503':
+          description: ms-services no respondió; no se guardó nada.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    get:
+      summary: Consultar mis evaluaciones de varios servicios (GC-444)
+      description: |
+        Las evaluaciones de esos servicios en las que quien consulta evaluó o fue evaluado; las de servicios ajenos no
+        aparecen. Sirve al detalle de un servicio y al historial propio (GC-449). No consulta a ms-services.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: serviceRequestIds
+          in: query
+          required: true
+          description: De 1 a 50 ids de solicitud, separados por coma.
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 50
+            items: { type: string, format: uuid }
+          style: form
+          explode: false
+      responses:
+        '200':
+          description: Evaluaciones visibles para quien consulta (puede estar vacía).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvaluationList'
+        '400':
+          description: Sin ids, más de 50 o un id mal formado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/users/service-categories:
+    get:
+      summary: Consultar el catálogo habilitado de especialidades y servicios (GC-322)
+      description: Disponible para cualquier usuario autenticado, sin importar el rol.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Categorías habilitadas, con el código que usa la API y su nombre para mostrar.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceCategoryItem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /api/users/auth/login:
     post:
@@ -225,6 +808,48 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /internal/tokens/{jti}/status:
+    get:
+      summary: Consultar si un access token fue revocado (interno, GC-333)
+      description: |
+        **Ruta interna entre microservicios; no es parte de la API pública.** Queda fuera del prefijo
+        `/api/users`, por lo que Traefik y el Ingress no la exponen, y exige la cabecera `X-Internal-Api-Key`
+        (variable `INTERNAL_API_KEY`). La usan servicios como ms-services para saber si un token firmado por
+        este servicio fue invalidado por un cierre de sesión, ya que la lista de `jti` revocados vive en la
+        base de ms-users.
+
+        Un `jti` desconocido responde `revoked: false` (200) y no 404, para que la respuesta no permita
+        averiguar qué identificadores existen. La respuesta lleva `Cache-Control: no-store`.
+      security:
+        - internalApiKey: []
+      parameters:
+        - name: jti
+          in: path
+          required: true
+          description: Claim `jti` del access token.
+          schema:
+            type: string
+            maxLength: 64
+      responses:
+        '200':
+          description: Estado de revocación.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [revoked]
+                properties:
+                  revoked:
+                    type: boolean
+                    description: "`true` si el token fue revocado antes de expirar."
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -234,6 +859,13 @@ components:
       description: |
         Access token RS256. Claims: `iss`, `sub` (`usr_<uuid>`), `aud`, `iat`, `exp`, `jti` y `roles`
         (por ejemplo `["ROLE_CLIENT"]`).
+    internalApiKey:
+      type: apiKey
+      in: header
+      name: X-Internal-Api-Key
+      description: |
+        Clave compartida entre microservicios (variable `INTERNAL_API_KEY`). Solo para las rutas
+        `/internal/**`; un token de usuario no sirve ahí, y esta clave no sirve en `/api/users/**`.
 
   responses:
     Unauthorized:
@@ -316,6 +948,29 @@ components:
         role: { type: string, enum: [CLIENT, PROFESSIONAL, ADMIN] }
         createdAt: { type: string, format: date-time }
 
+    ClientProfileRequest:
+      type: object
+      required: [firstName, lastName, phone]
+      properties:
+        firstName: { type: string, maxLength: 100 }
+        lastName: { type: string, maxLength: 100 }
+        phone:
+          type: string
+          pattern: '^\+?[0-9]{7,15}$'
+          description: Con `+` opcional y de 7 a 15 dígitos.
+
+    ClientProfile:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email, description: Solo lectura. }
+        firstName: { type: string }
+        lastName: { type: string }
+        documentType: { type: string, enum: [CC, CE, PASSPORT], description: Solo lectura. }
+        documentNumber: { type: string, description: Solo lectura. }
+        phone: { type: string }
+        createdAt: { type: string, format: date-time }
+
     TechnicianRegistrationRequest:
       allOf:
         - $ref: '#/components/schemas/ClientRegistrationRequest'
@@ -359,6 +1014,286 @@ components:
           type: array
           items: { $ref: '#/components/schemas/ServiceCategory' }
         updatedAt: { type: string, format: date-time }
+
+    TechnicianCategoriesRequest:
+      type: object
+      required: [categories]
+      properties:
+        categories:
+          type: array
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/ServiceCategory' }
+
+    TechnicianCategories:
+      type: object
+      properties:
+        categories:
+          type: array
+          items: { $ref: '#/components/schemas/ServiceCategory' }
+        updatedAt: { type: string, format: date-time }
+
+    ServiceCategoryItem:
+      type: object
+      properties:
+        code: { $ref: '#/components/schemas/ServiceCategory' }
+        name: { type: string, example: Plomería }
+
+    CoverageZoneRequest:
+      type: object
+      required: [city]
+      properties:
+        city: { type: string, maxLength: 100, example: Bogotá }
+        latitude: { type: number, minimum: -90, maximum: 90, nullable: true, example: 4.65 }
+        longitude: { type: number, minimum: -180, maximum: 180, nullable: true, example: -74.08 }
+        radiusKm: { type: integer, minimum: 1, maximum: 100, nullable: true, example: 15 }
+
+    CoverageZone:
+      type: object
+      properties:
+        city: { type: string, nullable: true }
+        latitude: { type: number, nullable: true }
+        longitude: { type: number, nullable: true }
+        radiusKm: { type: integer, nullable: true }
+        updatedAt: { type: string, format: date-time }
+
+    AvailabilitySlot:
+      type: object
+      required: [dayOfWeek, startTime, endTime]
+      properties:
+        dayOfWeek:
+          type: string
+          enum: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY, SATURDAY, SUNDAY]
+        startTime: { type: string, example: "08:00" }
+        endTime: { type: string, example: "12:00" }
+
+    AvailabilityRequest:
+      type: object
+      required: [slots]
+      properties:
+        slots:
+          type: array
+          items: { $ref: '#/components/schemas/AvailabilitySlot' }
+
+    Availability:
+      type: object
+      properties:
+        slots:
+          type: array
+          items: { $ref: '#/components/schemas/AvailabilitySlot' }
+        timeZone: { type: string, example: America/Bogota }
+        updatedAt: { type: string, format: date-time }
+
+    EligibilityRequest:
+      type: object
+      required: [requests]
+      properties:
+        requests:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            type: object
+            required: [requestId, category, city, expectedAt]
+            properties:
+              requestId: { type: string, format: uuid }
+              category: { $ref: '#/components/schemas/ServiceCategory' }
+              city: { type: string, example: Bogotá }
+              latitude: { type: number, nullable: true }
+              longitude: { type: number, nullable: true }
+              expectedAt: { type: string, format: date-time }
+
+    EligibilityResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              requestId: { type: string, format: uuid }
+              eligible: { type: boolean }
+              reasons:
+                type: array
+                items:
+                  type: string
+                  enum: [TECHNICIAN_NOT_FOUND, CATEGORY, ZONE, AVAILABILITY, VERIFICATION]
+
+    PublicProfilesRequest:
+      type: object
+      required: [userIds]
+      properties:
+        userIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { type: string, format: uuid }
+
+    PublicProfilesResponse:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicTechnicianProfile'
+
+    PublicTechnicianProfile:
+      type: object
+      description: Lo que el cliente ve de un prestador para compararlo (GC-425). Campos sin llenar llegan en null.
+      properties:
+        userId: { type: string, format: uuid }
+        displayName: { type: string, example: Carlos G., description: Nombre e inicial del apellido. }
+        verificationStatus: { $ref: '#/components/schemas/VerificationStatus' }
+        categories:
+          type: array
+          items: { $ref: '#/components/schemas/ServiceCategory' }
+        professionalDescription: { type: string, nullable: true }
+        yearsOfExperience: { type: integer, nullable: true }
+        city: { type: string, nullable: true, description: Ciudad de la zona de atención, sin coordenadas ni radio. }
+
+    TechnicianSearchRequest:
+      type: object
+      required: [category, city]
+      properties:
+        category: { $ref: '#/components/schemas/ServiceCategory' }
+        city: { type: string, maxLength: 100, example: Bogotá, description: Obligatoria; no puede estar en blanco. }
+        limit: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        cursor: { type: string, nullable: true, description: El `nextCursor` de la página anterior; sin él se empieza desde el principio. }
+        expectedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-10-19T14:00:00Z'
+          description: |
+            Momento esperado de la solicitud (ISO-8601). Si viene, solo se devuelven los técnicos con una franja de
+            disponibilidad que lo incluya, en hora de Colombia. Sin él no se filtra por horario.
+
+    TechnicianSearchResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechnicianSearchItem'
+        nextCursor:
+          type: string
+          nullable: true
+          description: Nulo solo cuando no quedan técnicos por revisar. Una página puede venir corta o vacía con cursor no nulo.
+
+    TechnicianSearchItem:
+      type: object
+      properties:
+        userId: { type: string, format: uuid }
+        displayName: { type: string, example: Carlos G., description: Nombre e inicial del apellido. }
+        categories:
+          type: array
+          items: { $ref: '#/components/schemas/ServiceCategory' }
+        city: { type: string, example: Bogotá, description: Ciudad de la zona de atención. }
+        circle:
+          type: object
+          nullable: true
+          description: Centro y radio de la zona; nulo si el técnico atiende toda la ciudad. Solo para consumo interno.
+          properties:
+            latitude: { type: number, format: double, example: 4.65 }
+            longitude: { type: number, format: double, example: -74.08 }
+            radiusKm: { type: integer, minimum: 1, maximum: 100, example: 10 }
+
+    CompanyResponse:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, example: Servicios Integrales Andina }
+        nit: { type: string, nullable: true, description: Opcional; el MVP no lo valida. }
+
+    CompanyTechniciansResponse:
+      type: object
+      properties:
+        technicians:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicTechnicianProfile'
+
+    TechnicianAssociationRequest:
+      type: object
+      required: [companyAdminUserId, technicianUserId]
+      properties:
+        companyAdminUserId: { type: string, format: uuid, description: "`users.id` del administrador de la empresa." }
+        technicianUserId: { type: string, format: uuid, description: "`users.id` del técnico." }
+
+    TechnicianAssociationResponse:
+      type: object
+      properties:
+        associated: { type: boolean }
+
+    CompanyPublicProfilesRequest:
+      type: object
+      required: [companyAdminUserIds]
+      properties:
+        companyAdminUserIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { type: string, format: uuid }
+
+    CompanyPublicProfilesResponse:
+      type: object
+      properties:
+        profiles:
+          type: array
+          items:
+            type: object
+            properties:
+              companyAdminUserId: { type: string, format: uuid }
+              name: { type: string, example: Servicios Integrales Andina }
+
+    CreateEvaluation:
+      type: object
+      required: [serviceRequestId, rating]
+      properties:
+        serviceRequestId: { type: string, format: uuid }
+        rating: { type: integer, minimum: 1, maximum: 5, description: 'Entero; 4.5 se rechaza.' }
+        comment: { type: string, maxLength: 500, nullable: true, description: 'Opcional; vacío se guarda como null.' }
+
+    Evaluation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        serviceRequestId: { type: string, format: uuid }
+        direction: { type: string, enum: [CLIENT_TO_PROVIDER, PROVIDER_TO_CLIENT] }
+        evaluatorId: { type: string, format: uuid }
+        evaluatedId: { type: string, format: uuid }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string, nullable: true, description: 'Solo lo ven el evaluador y el evaluado.' }
+        source: { type: string, enum: [CONFIRMED_CLOSURE] }
+        createdAt: { type: string, format: date-time }
+
+    EvaluationList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Evaluation' }
+
+    EvaluationProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            reasons:
+              type: array
+              items: { type: string }
+
+    CompanyTechniciansQuery:
+      type: object
+      required: [companyAdminUserId]
+      properties:
+        companyAdminUserId: { type: string, format: uuid }
+
+    CompanyTechnicianIdsResponse:
+      type: object
+      properties:
+        technicianUserIds:
+          type: array
+          items: { type: string, format: uuid }
 
     VerificationStatus:
       type: string
