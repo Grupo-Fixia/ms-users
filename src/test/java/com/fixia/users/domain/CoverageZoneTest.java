@@ -80,6 +80,17 @@ class CoverageZoneTest {
     }
 
     @Test
+    void laCiudadCoincideSinImportarMayusculasTildesNiEspacios() {
+        CoverageZone zone = new CoverageZone("Bogotá", 4.65, -74.08, 10);
+
+        assertThat(zone.matchesCity("bogota")).isTrue();
+        assertThat(zone.matchesCity("  BOGOTÁ ")).isTrue();
+        assertThat(zone.matchesCity("Medellín")).isFalse();
+        assertThat(zone.matchesCity(null)).isFalse();
+        assertThat(new CoverageZone("Medellín").matchesCity("MEDELLIN")).isTrue();
+    }
+
+    @Test
     void dosZonasConLosMismosValoresSonIguales() {
         assertThat(new CoverageZone("Bogotá", 4.651, -74.08, 10))
                 .isEqualTo(new CoverageZone("Bogotá", 4.649, -74.08, 10))

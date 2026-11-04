@@ -392,6 +392,51 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /internal/technicians/search:
+    post:
+      summary: Buscar técnicos por categoría y ciudad (GC-900, interna)
+      description: |
+        Ruta interna para ms-matching-geo; Traefik y el Ingress no la exponen. Va bajo `/internal/**`, que protege la
+        cabecera `X-Internal-Api-Key`. Devuelve los técnicos con cuenta activa que ofrecen la categoría y cuya zona de
+        atención es la ciudad indicada (sin distinguir mayúsculas, tildes ni espacios sobrantes), en orden estable por
+        `userId` y sin ranking. No filtra por círculo: el círculo viaja en `circle` para que quien consulta lo aplique con
+        las coordenadas de la solicitud.
+
+        **Disponibilidad (GC-474).** Si se envía `expectedAt`, solo se devuelven los técnicos con una franja semanal que
+        incluya ese instante en hora de Colombia (`America/Bogota`; inicio incluido, fin excluido), la misma regla de la
+        elegibilidad. Un técnico sin franjas declaradas no aparece cuando se envía `expectedAt`. Sin `expectedAt` no se
+        filtra por horario.
+
+        **Verificación (GC-474).** Solo se devuelven los técnicos con verificación vigente si
+        `fixia.eligibility.require-verified` está activo, el mismo flag de la elegibilidad (por defecto, no).
+
+        **Paginación por cursor.** Una consulta revisa como máximo 500 técnicos, en lotes de 100. Si con eso no reúne
+        `limit` resultados devuelve los que encontró y un `nextCursor` con la posición alcanzada; por eso una página
+        puede venir corta, o vacía, con cursor no nulo, y hay que seguir pidiendo hasta que `nextCursor` sea nulo.
+        El cursor es opaco; uno que este servicio no emitió da 400.
+
+        `circle` revela el domicilio aproximado del técnico: nunca debe llegar a un cliente final. Correo, teléfono y
+        documento no viajan. No se debe cachear.
+      security:
+        - internalApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TechnicianSearchRequest'
+      responses:
+        '200':
+          description: Una página de técnicos compatibles con la categoría y la ciudad.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianSearchResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
   /api/users/companies/me:
     get:
       summary: Consultar la empresa del administrador autenticado (GC-466)
@@ -1104,6 +1149,53 @@ components:
         professionalDescription: { type: string, nullable: true }
         yearsOfExperience: { type: integer, nullable: true }
         city: { type: string, nullable: true, description: Ciudad de la zona de atención, sin coordenadas ni radio. }
+
+    TechnicianSearchRequest:
+      type: object
+      required: [category, city]
+      properties:
+        category: { $ref: '#/components/schemas/ServiceCategory' }
+        city: { type: string, maxLength: 100, example: Bogotá, description: Obligatoria; no puede estar en blanco. }
+        limit: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        cursor: { type: string, nullable: true, description: El `nextCursor` de la página anterior; sin él se empieza desde el principio. }
+        expectedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-10-19T14:00:00Z'
+          description: |
+            Momento esperado de la solicitud (ISO-8601). Si viene, solo se devuelven los técnicos con una franja de
+            disponibilidad que lo incluya, en hora de Colombia. Sin él no se filtra por horario.
+
+    TechnicianSearchResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TechnicianSearchItem'
+        nextCursor:
+          type: string
+          nullable: true
+          description: Nulo solo cuando no quedan técnicos por revisar. Una página puede venir corta o vacía con cursor no nulo.
+
+    TechnicianSearchItem:
+      type: object
+      properties:
+        userId: { type: string, format: uuid }
+        displayName: { type: string, example: Carlos G., description: Nombre e inicial del apellido. }
+        categories:
+          type: array
+          items: { $ref: '#/components/schemas/ServiceCategory' }
+        city: { type: string, example: Bogotá, description: Ciudad de la zona de atención. }
+        circle:
+          type: object
+          nullable: true
+          description: Centro y radio de la zona; nulo si el técnico atiende toda la ciudad. Solo para consumo interno.
+          properties:
+            latitude: { type: number, format: double, example: 4.65 }
+            longitude: { type: number, format: double, example: -74.08 }
+            radiusKm: { type: integer, minimum: 1, maximum: 100, example: 10 }
 
     CompanyResponse:
       type: object

@@ -84,13 +84,21 @@ public class CoverageZone {
      * dos, basta la ciudad.
      */
     public boolean covers(String requestCity, Double requestLatitude, Double requestLongitude) {
-        if (requestCity == null || !normalize(city).equals(normalize(requestCity))) {
+        if (!matchesCity(requestCity)) {
             return false;
         }
         if (!hasCircle() || requestLatitude == null || requestLongitude == null) {
             return true;
         }
         return distanceKm(latitude, longitude, requestLatitude, requestLongitude) <= radiusKm;
+    }
+
+    /**
+     * Si la ciudad de la zona es la indicada, sin distinguir mayúsculas, tildes ni espacios sobrantes. Es la parte de
+     * {@link #covers} que no depende de coordenadas: la búsqueda de técnicos por ciudad (matching) la usa sola.
+     */
+    public boolean matchesCity(String otherCity) {
+        return otherCity != null && normalize(city).equals(normalize(otherCity));
     }
 
     private static String normalize(String value) {
