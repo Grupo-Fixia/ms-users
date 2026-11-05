@@ -27,6 +27,7 @@ spec:
           env:
             - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres.data.svc.cluster.local:5432/ms_users" }
             - { name: SPRING_DATASOURCE_USERNAME, value: "ms_users" }
+            - { name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_SERVLET_DISPATCHERSERVLET, value: "DEBUG" }
           envFrom:
             - secretRef: { name: ms-users-secrets }
           startupProbe:
