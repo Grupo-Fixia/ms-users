@@ -51,12 +51,14 @@ class SensitiveDataToStringTest {
 
     @Test
     void elPerfilDelClienteNoImprimeDatosPersonales() {
-        ClientProfileRequest request = new ClientProfileRequest("Ana", "Pérez", "3001112233");
+        ClientProfileRequest request = new ClientProfileRequest("Ana", "Pérez", "3001112233", "Calle 10 # 5-20",
+                "Bogotá");
         ClientProfileResponse response = new ClientProfileResponse(UUID.randomUUID(), "ana@example.com", "Ana",
-                "Pérez", DocumentType.CC, "123456789", "3001112233", Instant.now());
+                "Pérez", DocumentType.CC, "123456789", "3001112233", "Calle 10 # 5-20", "Bogotá", Instant.now());
 
-        assertThat(request.toString()).doesNotContain("Ana").doesNotContain("3001112233");
+        assertThat(request.toString()).doesNotContain("Ana").doesNotContain("3001112233")
+                .doesNotContain("Calle 10");
         assertThat(response.toString()).doesNotContain("ana@example.com").doesNotContain("123456789")
-                .doesNotContain("3001112233").doesNotContain("Pérez");
+                .doesNotContain("3001112233").doesNotContain("Pérez").doesNotContain("Calle 10");
     }
 }
