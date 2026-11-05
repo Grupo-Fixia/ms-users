@@ -6,6 +6,7 @@ import com.fixia.users.domain.Technician;
 import com.fixia.users.domain.User;
 import com.fixia.users.domain.UserStatus;
 import com.fixia.users.dto.PublicProfilesResponse;
+import com.fixia.users.dto.Reputation;
 import com.fixia.users.repository.TechnicianRepository;
 import com.fixia.users.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -30,10 +31,13 @@ public class TechnicianPublicProfileService {
 
     private final UserRepository userRepository;
     private final TechnicianRepository technicianRepository;
+    private final ReputationService reputationService;
 
-    public TechnicianPublicProfileService(UserRepository userRepository, TechnicianRepository technicianRepository) {
+    public TechnicianPublicProfileService(UserRepository userRepository, TechnicianRepository technicianRepository,
+                                          ReputationService reputationService) {
         this.userRepository = userRepository;
         this.technicianRepository = technicianRepository;
+        this.reputationService = reputationService;
     }
 
     /**
@@ -48,19 +52,22 @@ public class TechnicianPublicProfileService {
                 .collect(Collectors.toMap(User::getId, Function.identity()));
         Map<UUID, Technician> technicians = technicianRepository.findByUserIdIn(activeTechnicians.keySet()).stream()
                 .collect(Collectors.toMap(Technician::getUserId, Function.identity()));
+        // Una sola consulta agrupada para todo el lote (GC-446).
+        Map<UUID, Reputation> reputations = reputationService.asProvider(technicians.keySet());
 
         List<PublicProfilesResponse.Profile> profiles = new ArrayList<>();
         for (UUID id : ids) {
             User user = activeTechnicians.get(id);
             Technician technician = technicians.get(id);
             if (user != null && technician != null) {
-                profiles.add(profile(user, technician));
+                profiles.add(profile(user, technician, reputations.get(id)));
             }
         }
         return new PublicProfilesResponse(profiles);
     }
 
-    private static PublicProfilesResponse.Profile profile(User user, Technician technician) {
+    private static PublicProfilesResponse.Profile profile(User user, Technician technician,
+                                                          Reputation reputation) {
         CoverageZone zone = technician.getCoverageZone();
         return new PublicProfilesResponse.Profile(
                 user.getId(),
@@ -69,7 +76,8 @@ public class TechnicianPublicProfileService {
                 List.copyOf(technician.getCategories()),
                 technician.getProfessionalDescription(),
                 technician.getYearsOfExperience(),
-                zone == null ? null : zone.getCity());
+                zone == null ? null : zone.getCity(),
+                reputation);
     }
 
     /** Nombre e inicial del apellido ("Carlos G."): identifica al prestador sin exponer el nombre completo. */

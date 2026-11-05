@@ -2,6 +2,8 @@ package com.fixia.users.controller;
 
 import com.fixia.users.dto.TechnicianProfileRequest;
 import com.fixia.users.dto.TechnicianProfileResponse;
+import com.fixia.users.domain.Technician;
+import com.fixia.users.service.ReputationService;
 import com.fixia.users.service.TechnicianProfileService;
 import com.fixia.users.service.TokenService;
 import jakarta.validation.Valid;
@@ -22,20 +24,27 @@ import java.util.UUID;
 public class TechnicianProfileController {
 
     private final TechnicianProfileService profileService;
+    private final ReputationService reputationService;
 
-    public TechnicianProfileController(TechnicianProfileService profileService) {
+    public TechnicianProfileController(TechnicianProfileService profileService, ReputationService reputationService) {
         this.profileService = profileService;
+        this.reputationService = reputationService;
     }
 
     @GetMapping
     public TechnicianProfileResponse get(@AuthenticationPrincipal Jwt jwt) {
-        return TechnicianProfileResponse.from(profileService.get(parseUserId(jwt)));
+        return response(profileService.get(parseUserId(jwt)));
     }
 
     @PutMapping
     public TechnicianProfileResponse update(@AuthenticationPrincipal Jwt jwt,
                                             @Valid @RequestBody TechnicianProfileRequest request) {
-        return TechnicianProfileResponse.from(profileService.update(parseUserId(jwt), request));
+        return response(profileService.update(parseUserId(jwt), request));
+    }
+
+    /** Con la reputación que ven los clientes (GC-446), calculada de sus evaluaciones. */
+    private TechnicianProfileResponse response(Technician technician) {
+        return TechnicianProfileResponse.from(technician, reputationService.asProvider(technician.getUserId()));
     }
 
     private static UUID parseUserId(Jwt jwt) {
