@@ -18,6 +18,8 @@ public record ClientProfileResponse(
         DocumentType documentType,
         String documentNumber,
         String phone,
+        String address,
+        String city,
         Instant createdAt
 ) {
     public static ClientProfileResponse from(User user) {
@@ -29,6 +31,8 @@ public record ClientProfileResponse(
                 user.getDocumentType(),
                 user.getDocumentNumber(),
                 user.getPhone(),
+                user.getAddress(),
+                user.getCity(),
                 user.getCreatedAt());
     }
 
