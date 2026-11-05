@@ -25,6 +25,7 @@ spec:
           ports:
             - { name: http, containerPort: 8080 }
           env:
+            - { name: SPRING_PROFILES_ACTIVE, value: "seed-qa" }
             - { name: SPRING_DATASOURCE_URL, value: "jdbc:postgresql://postgres.data.svc.cluster.local:5432/ms_users" }
             - { name: SPRING_DATASOURCE_USERNAME, value: "ms_users" }
             - { name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_SERVLET_DISPATCHERSERVLET, value: "DEBUG" }
