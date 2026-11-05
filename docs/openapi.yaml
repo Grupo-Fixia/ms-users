@@ -958,6 +958,18 @@ components:
           type: string
           pattern: '^\+?[0-9]{7,15}$'
           description: Con `+` opcional y de 7 a 15 dígitos.
+        address:
+          type: string
+          nullable: true
+          maxLength: 255
+          description: Opcional (GC-317). Ausente o en blanco deja el perfil sin dirección.
+          example: Calle 10 # 5-20, apto 301
+        city:
+          type: string
+          nullable: true
+          maxLength: 100
+          description: Opcional (GC-317). Ausente o en blanco queda vacía.
+          example: Bogotá
 
     ClientProfile:
       type: object
@@ -969,6 +981,8 @@ components:
         documentType: { type: string, enum: [CC, CE, PASSPORT], description: Solo lectura. }
         documentNumber: { type: string, description: Solo lectura. }
         phone: { type: string }
+        address: { type: string, nullable: true, description: Dirección del cliente (GC-317); null si no la ha indicado. }
+        city: { type: string, nullable: true, description: Ciudad de la dirección (GC-317); null si no la indicó. }
         createdAt: { type: string, format: date-time }
 
     TechnicianRegistrationRequest:

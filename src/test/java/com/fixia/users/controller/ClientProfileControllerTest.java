@@ -305,4 +305,79 @@ class ClientProfileControllerTest {
         getProfile(second).andExpect(status().isUnauthorized());
         updateProfile(second, body("María", "Gómez", "3104445566")).andExpect(status().isUnauthorized());
     }
+
+    // ---------- Dirección (GC-317) ----------
+
+    private static Map<String, Object> bodyWithAddress(String address, String city) {
+        Map<String, Object> body = body("Ana", "Pérez", "3001112233");
+        body.put("address", address);
+        body.put("city", city);
+        return body;
+    }
+
+    @Test
+    void unaCuentaNuevaNoTieneDireccion() throws Exception {
+        String token = clientToken("ana@example.com", "100200300");
+
+        getProfile(token)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.address").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.city").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void elClienteGuardaSuDireccionYCiudadYSeMuestranAlConsultar() throws Exception {
+        String token = clientToken("ana@example.com", "100200300");
+
+        updateProfile(token, bodyWithAddress("  Calle 10 # 5-20, apto 301  ", " Bogotá "))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.address").value("Calle 10 # 5-20, apto 301"))
+                .andExpect(jsonPath("$.city").value("Bogotá"));
+
+        getProfile(token)
+                .andExpect(jsonPath("$.address").value("Calle 10 # 5-20, apto 301"))
+                .andExpect(jsonPath("$.city").value("Bogotá"));
+        User stored = stored("ana@example.com");
+        org.assertj.core.api.Assertions.assertThat(stored.getAddress()).isEqualTo("Calle 10 # 5-20, apto 301");
+        org.assertj.core.api.Assertions.assertThat(stored.getCity()).isEqualTo("Bogotá");
+    }
+
+    @Test
+    void laCiudadEsOpcional() throws Exception {
+        String token = clientToken("ana@example.com", "100200300");
+
+        updateProfile(token, bodyWithAddress("Carrera 7 # 45-10", null))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.address").value("Carrera 7 # 45-10"))
+                .andExpect(jsonPath("$.city").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void enviarLaDireccionVaciaOSinElCampoLaBorra() throws Exception {
+        String token = clientToken("ana@example.com", "100200300");
+        updateProfile(token, bodyWithAddress("Calle 10 # 5-20", "Bogotá")).andExpect(status().isOk());
+
+        updateProfile(token, bodyWithAddress("   ", "")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.address").value(org.hamcrest.Matchers.nullValue()))
+                .andExpect(jsonPath("$.city").value(org.hamcrest.Matchers.nullValue()));
+
+        updateProfile(token, bodyWithAddress("Calle 10 # 5-20", "Bogotá")).andExpect(status().isOk());
+        updateProfile(token, body("Ana", "Pérez", "3001112233")).andExpect(status().isOk())
+                .andExpect(jsonPath("$.address").value(org.hamcrest.Matchers.nullValue()));
+    }
+
+    @Test
+    void unaDireccionOCiudadDemasiadoLargaResponde400YNoCambiaNada() throws Exception {
+        String token = clientToken("ana@example.com", "100200300");
+        updateProfile(token, bodyWithAddress("Calle 10 # 5-20", "Bogotá")).andExpect(status().isOk());
+
+        updateProfile(token, bodyWithAddress("x".repeat(256), "Bogotá"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field").value(hasItem("address")));
+        updateProfile(token, bodyWithAddress("Calle 10 # 5-20", "y".repeat(101)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field").value(hasItem("city")));
+
+        org.assertj.core.api.Assertions.assertThat(stored("ana@example.com").getAddress()).isEqualTo("Calle 10 # 5-20");
+    }
 }

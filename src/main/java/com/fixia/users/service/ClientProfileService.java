@@ -32,7 +32,7 @@ public class ClientProfileService {
     }
 
     /**
-     * Reemplaza nombre, apellido y teléfono. El cuerpo ya viene validado con las reglas del registro; si aun así
+     * Reemplaza nombre, apellido, teléfono, dirección y ciudad. El cuerpo ya viene validado con las reglas del registro; si aun así
      * algún dato no cumple las del dominio, la cuenta queda sin cambios.
      */
     @Transactional
@@ -40,6 +40,7 @@ public class ClientProfileService {
         User client = findActiveClient(userId);
         try {
             client.updateContactInfo(request.firstName(), request.lastName(), request.phone());
+            client.updateAddress(request.address(), request.city());
         } catch (IllegalArgumentException e) {
             throw new InvalidClientDataException(e.getMessage(), e);
         }
