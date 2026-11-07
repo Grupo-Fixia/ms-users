@@ -850,6 +850,86 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/users/admin/users:
+    get:
+      summary: Listar usuarios (ADMIN, GC-535)
+      description: |
+        Solo `ROLE_ADMIN`. Lista paginada por cursor, de la más reciente a la más antigua (`createdAt` y `id`
+        descendentes). No trae documento ni teléfono. Cada consulta queda en `admin_audit_events` (`USER_LIST`, con los
+        filtros usados). Contrato: `docs/contracts/admin.md` §3.1.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: role, in: query, schema: { type: string, enum: [CLIENT, PROFESSIONAL, COMPANY, ADMIN] } }
+        - { name: status, in: query, schema: { type: string, enum: [ACTIVE, DISABLED] } }
+        - { name: q, in: query, description: 'Busca en correo, nombre y apellido; 2 a 100 caracteres.', schema: { type: string, minLength: 2, maxLength: 100 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, description: 'El `nextCursor` de la página anterior.', schema: { type: string } }
+      responses:
+        '200':
+          description: Página de usuarios.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserPage'
+        '400':
+          description: Filtro, límite o cursor inválido.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/users/admin/users/{id}:
+    get:
+      summary: Detalle de un usuario (ADMIN, GC-535)
+      description: |
+        Solo `ROLE_ADMIN`. Agrega teléfono y documento enmascarado (solo los 4 últimos caracteres); si es técnico,
+        `verificationStatus`, y si es empresa, `companyName`. Se registra `USER_VIEW` (`NOT_FOUND` si no existe).
+        Contrato: `docs/contracts/admin.md` §3.2.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Usuario.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserDetail'
+        '400':
+          description: El id no es un UUID.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No existe un usuario con ese id.
+  /api/users/admin/audit-events:
+    get:
+      summary: Registro de acciones del ADMIN en ms-users (GC-535)
+      description: |
+        Solo `ROLE_ADMIN`. Del más reciente al más antiguo; la propia consulta se registra (`AUDIT_LIST`) después de
+        leer, así que no aparece en la página que devuelve. Contrato: `docs/contracts/admin.md` §3.3 y §5.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: adminId, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, schema: { type: string, enum: [USER_LIST, USER_VIEW, AUDIT_LIST] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Página del registro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAuditPage'
+        '400':
+          description: Filtro, límite o cursor inválido.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 components:
   securitySchemes:
     bearerAuth:
@@ -913,6 +993,51 @@ components:
             $ref: '#/components/schemas/ValidationProblem'
 
   schemas:
+    AdminUserSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        role: { type: string, enum: [CLIENT, PROFESSIONAL, COMPANY, ADMIN] }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
+        createdAt: { type: string, format: date-time }
+    AdminUserPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminUserSummary' }
+        nextCursor: { type: string, nullable: true }
+    AdminUserDetail:
+      allOf:
+        - $ref: '#/components/schemas/AdminUserSummary'
+        - type: object
+          properties:
+            phone: { type: string }
+            documentType: { type: string }
+            documentNumberMasked: { type: string, example: '******4050' }
+            verificationStatus: { type: string, description: 'Solo si es técnico.' }
+            companyName: { type: string, description: 'Solo si es empresa.' }
+    AdminAuditEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        adminId: { type: string, format: uuid }
+        action: { type: string, enum: [USER_LIST, USER_VIEW, AUDIT_LIST] }
+        targetType: { type: string, nullable: true, enum: [USER] }
+        targetId: { type: string, format: uuid, nullable: true }
+        details: { type: object, nullable: true, description: 'Filtros usados; nunca contraseñas, tokens ni documentos.' }
+        outcome: { type: string, enum: [OK, DENIED, CONFLICT, NOT_FOUND] }
+        occurredAt: { type: string, format: date-time }
+    AdminAuditPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminAuditEvent' }
+        nextCursor: { type: string, nullable: true }
     ClientRegistrationRequest:
       type: object
       required: [firstName, lastName, documentType, documentNumber, email, phone, password, policyVersion, consentAccepted]
