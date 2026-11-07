@@ -330,8 +330,30 @@ class EvaluationControllerTest {
                 .andExpect(jsonPath("$.reasons", contains("SERVICE_NOT_CLOSED")));
     }
 
+    /**
+     * GC-551: en un servicio de empresa, la evaluación del cliente va al técnico que lo ejecutó (no a la cuenta de la
+     * empresa), y ese técnico evalúa al cliente. Otro técnico, o la cuenta de la empresa, no participan.
+     */
     @Test
-    void unServicioDeEmpresaNoSeEvalua() throws Exception {
+    void enUnServicioDeEmpresaSeEvaluaAlTecnicoQueLoEjecuto() throws Exception {
+        UUID company = account("empresa@example.com", "500", Role.COMPANY);
+        UUID service = UUID.randomUUID();
+        participation(new Participation(service, "CLOSED", client, company, "COMPANY", Instant.now(), technician));
+
+        asClient(service, 5, "Muy bien")
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.evaluatedId").value(technician.toString()));
+        evaluate(technician, "ROLE_PROFESSIONAL", service, 4, null)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.evaluatedId").value(client.toString()));
+        evaluate(otherTechnician, "ROLE_PROFESSIONAL", service, 4, null).andExpect(status().isNotFound());
+        assertThat(evaluationRepository.findAll()).extracting(ServiceEvaluation::getEvaluatedId)
+                .containsExactlyInAnyOrder(technician, client);
+    }
+
+    /** Si ms-services aún no informa el ejecutor, un servicio de empresa se sigue rechazando como antes de GC-551. */
+    @Test
+    void unServicioDeEmpresaSinEjecutorInformadoNoSeEvalua() throws Exception {
         UUID company = account("empresa@example.com", "500", Role.COMPANY);
         UUID service = UUID.randomUUID();
         participation(new Participation(service, "CLOSED", client, company, "COMPANY", Instant.now()));

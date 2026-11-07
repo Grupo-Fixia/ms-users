@@ -1342,6 +1342,16 @@ components:
         id: { type: string, format: uuid }
         name: { type: string, example: Servicios Integrales Andina }
         nit: { type: string, nullable: true, description: Opcional; el MVP no lo valida. }
+        reputation:
+          type: object
+          nullable: true
+          description: >-
+            GC-551. Promedio simple de las reputaciones de los técnicos asociados actuales que tienen evaluaciones (sin
+            ponderar por cuántas tiene cada uno), redondeado a un decimal; count es el total de evaluaciones de esos
+            técnicos. null si ninguno tiene evaluaciones.
+          properties:
+            average: { type: number, example: 4.5 }
+            count: { type: integer, example: 12 }
 
     CompanyTechniciansResponse:
       type: object
@@ -1383,6 +1393,16 @@ components:
             properties:
               companyAdminUserId: { type: string, format: uuid }
               name: { type: string, example: Servicios Integrales Andina }
+            reputation:
+              type: object
+              nullable: true
+              description: >-
+                GC-551. Promedio simple de las reputaciones de los técnicos asociados actuales que tienen evaluaciones (sin
+                ponderar por cuántas tiene cada uno), redondeado a un decimal; count es el total de evaluaciones de esos
+                técnicos. null si ninguno tiene evaluaciones.
+              properties:
+                average: { type: number, example: 4.5 }
+                count: { type: integer, example: 12 }
 
     CreateEvaluation:
       type: object

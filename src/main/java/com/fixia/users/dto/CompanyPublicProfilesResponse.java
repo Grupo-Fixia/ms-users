@@ -9,7 +9,10 @@ import java.util.UUID;
  */
 public record CompanyPublicProfilesResponse(List<Profile> profiles) {
 
-    /** Solo el nombre comercial: nunca el NIT, el correo ni los datos de la cuenta del administrador. */
-    public record Profile(UUID companyAdminUserId, String name) {
+    /**
+     * Solo el nombre comercial: nunca el NIT, el correo ni los datos de la cuenta del administrador. {@code reputation}
+     * (GC-551) es el promedio simple de sus técnicos actuales con evaluaciones, o {@code null} si ninguno tiene.
+     */
+    public record Profile(UUID companyAdminUserId, String name, Reputation reputation) {
     }
 }
