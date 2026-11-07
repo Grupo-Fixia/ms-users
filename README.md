@@ -8,6 +8,8 @@ GC-444 y GC-446): [`docs/contracts/evaluaciones.md`](docs/contracts/evaluaciones
 [`docs/events`](docs/events/README.md).
 Administración mínima del ADMIN de Fixia (GC-534, la implementan GC-535 y GC-536):
 [`docs/contracts/admin.md`](docs/contracts/admin.md).
+Empresas: invitaciones, desvinculación de técnicos y técnico designado que cotiza y ejecuta (GC-516, GC-551):
+[`docs/contracts/empresas.md`](docs/contracts/empresas.md).
 
 ## Pruebas
 

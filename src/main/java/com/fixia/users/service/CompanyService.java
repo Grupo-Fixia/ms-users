@@ -1,5 +1,7 @@
 package com.fixia.users.service;
 
+import com.fixia.users.dto.CompanyResponse;
+import com.fixia.users.dto.Reputation;
 import com.fixia.users.domain.Company;
 import com.fixia.users.domain.CompanyTechnician;
 import com.fixia.users.domain.Role;
@@ -40,10 +42,13 @@ public class CompanyService {
     private final CompanyRepository companyRepository;
     private final CompanyTechnicianRepository associationRepository;
     private final TechnicianPublicProfileService publicProfileService;
+    private final ReputationService reputationService;
 
     public CompanyService(UserRepository userRepository, CompanyRepository companyRepository,
                           CompanyTechnicianRepository associationRepository,
-                          TechnicianPublicProfileService publicProfileService) {
+                          TechnicianPublicProfileService publicProfileService,
+                          ReputationService reputationService) {
+        this.reputationService = reputationService;
         this.userRepository = userRepository;
         this.companyRepository = companyRepository;
         this.associationRepository = associationRepository;
@@ -53,6 +58,15 @@ public class CompanyService {
     @Transactional(readOnly = true)
     public Company get(UUID adminUserId) {
         return findCompany(adminUserId);
+    }
+
+    /** La empresa de la cuenta autenticada con su reputación (GC-551). */
+    @Transactional(readOnly = true)
+    public CompanyResponse getWithReputation(UUID adminUserId) {
+        Company company = findCompany(adminUserId);
+        Reputation reputation = reputationService.ofCompanies(Map.of(adminUserId, activeTechnicianIds(company)))
+                .get(adminUserId);
+        return CompanyResponse.from(company, reputation);
     }
 
     /**
@@ -98,7 +112,12 @@ public class CompanyService {
         if (company.isEmpty()) {
             return new CompanyTechnicianIdsResponse(List.of());
         }
-        List<UUID> associated = associationRepository.findByCompanyIdOrderByCreatedAtAscIdAsc(company.get().getId())
+        return new CompanyTechnicianIdsResponse(activeTechnicianIds(company.get()));
+    }
+
+    /** Técnicos asociados a la empresa con cuenta activa de técnico, en el orden en que se asociaron. */
+    private List<UUID> activeTechnicianIds(Company company) {
+        List<UUID> associated = associationRepository.findByCompanyIdOrderByCreatedAtAscIdAsc(company.getId())
                 .stream()
                 .map(CompanyTechnician::getTechnicianUserId)
                 .toList();
@@ -106,7 +125,7 @@ public class CompanyService {
                 .filter(user -> user.getRole() == Role.PROFESSIONAL && user.getStatus() == UserStatus.ACTIVE)
                 .map(User::getId)
                 .collect(Collectors.toSet());
-        return new CompanyTechnicianIdsResponse(associated.stream().filter(active::contains).toList());
+        return associated.stream().filter(active::contains).toList();
     }
 
     /**
@@ -122,11 +141,15 @@ public class CompanyService {
                 .collect(Collectors.toSet());
         Map<UUID, Company> companies = companyRepository.findByAdminUserIdIn(activeAdmins).stream()
                 .collect(Collectors.toMap(Company::getAdminUserId, Function.identity()));
+        // GC-551: reputación de cada empresa con sus técnicos actuales, en una sola consulta de evaluaciones.
+        Map<UUID, List<UUID>> technicians = new java.util.HashMap<>();
+        companies.forEach((adminId, company) -> technicians.put(adminId, activeTechnicianIds(company)));
+        Map<UUID, Reputation> reputations = reputationService.ofCompanies(technicians);
         List<CompanyPublicProfilesResponse.Profile> profiles = new ArrayList<>();
         for (UUID id : ids) {
             Company company = companies.get(id);
             if (company != null) {
-                profiles.add(new CompanyPublicProfilesResponse.Profile(id, company.getName()));
+                profiles.add(new CompanyPublicProfilesResponse.Profile(id, company.getName(), reputations.get(id)));
             }
         }
         return new CompanyPublicProfilesResponse(profiles);

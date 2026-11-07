@@ -22,7 +22,20 @@ public class ServiceParticipationClient {
 
     /** Lo que responde ms-services. Estado y tipo de prestador como texto: este servicio no copia sus enumeraciones. */
     public record Participation(UUID serviceRequestId, String status, UUID clientId, UUID providerId,
-                                String providerType, Instant closedAt) {
+                                String providerType, Instant closedAt, UUID executorId) {
+
+        public Participation(UUID serviceRequestId, String status, UUID clientId, UUID providerId,
+                             String providerType, Instant closedAt) {
+            this(serviceRequestId, status, clientId, providerId, providerType, closedAt, null);
+        }
+
+        /**
+         * Quién ejecutó el servicio (GC-551): a él se le evalúa y él evalúa al cliente. En un independiente es el
+         * prestador; en una empresa, su técnico designado. Si ms-services aún no lo envía, es el prestador.
+         */
+        public UUID executor() {
+            return executorId != null ? executorId : providerId;
+        }
 
         public boolean isClosed() {
             return "CLOSED".equals(status);
