@@ -6,6 +6,8 @@ Registro de clientes y técnicos, inicio y cierre de sesión, y perfil profesion
 Contrato de la API: [`docs/openapi.yaml`](docs/openapi.yaml). Evaluaciones y reputación (GC-443, se implementan en
 GC-444 y GC-446): [`docs/contracts/evaluaciones.md`](docs/contracts/evaluaciones.md), con su evento en
 [`docs/events`](docs/events/README.md).
+Administración mínima del ADMIN de Fixia (GC-534, la implementan GC-535 y GC-536):
+[`docs/contracts/admin.md`](docs/contracts/admin.md).
 
 ## Pruebas
 
@@ -209,7 +211,7 @@ Identidad empresarial y técnicos asociados (GC-466, historia GC-464).
 
 ### Datos de QA (perfil `seed-qa`)
 
-`seed/qa_empresas.sql` es un script **idempotente** que carga `QaSeedLoader` al arrancar, solo con el perfil `seed-qa`
+`seed/qa_empresas.sql` y `seed/qa_admin.sql` son scripts **idempotentes** que carga `QaSeedLoader` al arrancar, solo con el perfil `seed-qa`
 y después de las migraciones. Nunca se activa en producción: crea cuentas con una contraseña conocida. En Docker,
 `SPRING_PROFILES_ACTIVE=seed-qa` en el servicio `ms-users` del entorno.
 
@@ -228,5 +230,6 @@ y después de las migraciones. Nunca se activa en producción: crea cuentas con 
 | `empresa2@fixia-qa.test` | `COMPANY` | Mantenimientos del Valle: `tecnico3`, `tecnico4` |
 | `empresa3@fixia-qa.test` | `COMPANY` | Hogar Experto, sin técnicos (lista vacía) |
 | `tecnico1..4@fixia-qa.test` | `PROFESSIONAL` | Verificados, con especialidades y ciudad de cobertura |
+| `admin@fixia-qa.test` | `ADMIN` | Administrador de Fixia (GC-503), en `seed/qa_admin.sql`. Token con `ROLE_ADMIN`: reembolsos de ms-payments y consultas administrativas. El rol ADMIN no se obtiene por ningún registro público |
 
 Contraseña de todas las cuentas de QA: `FixiaQA#2026`.
