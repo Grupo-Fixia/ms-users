@@ -2,6 +2,11 @@ package com.fixia.users;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fixia.users.domain.IneligibilityReason;
+import com.fixia.users.domain.ServiceCategory;
+import com.fixia.users.dto.EligibilityRequest;
+import com.fixia.users.dto.EligibilityResponse;
+import com.fixia.users.service.TechnicianEligibilityService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -18,7 +23,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import javax.sql.DataSource;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -51,6 +61,9 @@ class QaSeedTest {
 
     @Autowired
     private DataSource dataSource;
+
+    @Autowired
+    private TechnicianEligibilityService eligibilityService;
 
     private String login(String email) throws Exception {
         String response = mockMvc.perform(post("/api/users/auth/login")
@@ -118,10 +131,12 @@ class QaSeedTest {
         int categories = count("technician_categories");
         int companies = count("companies");
         int associations = count("company_technicians");
+        int slots = count("technician_availability");
         assertThat(users).isEqualTo(8); // 3 empresas, 4 técnicos y el ADMIN (GC-503)
         assertThat(technicians).isEqualTo(4);
         assertThat(companies).isEqualTo(3);
         assertThat(associations).isEqualTo(4);
+        assertThat(slots).isEqualTo(28); // 4 técnicos x 7 días (GC-504)
 
         new ResourceDatabasePopulator(new ClassPathResource("seed/qa_empresas.sql"),
                 new ClassPathResource("seed/qa_admin.sql")).execute(dataSource);
@@ -131,6 +146,71 @@ class QaSeedTest {
         assertThat(count("technician_categories")).isEqualTo(categories);
         assertThat(count("companies")).isEqualTo(companies);
         assertThat(count("company_technicians")).isEqualTo(associations);
+        assertThat(count("technician_availability")).isEqualTo(slots);
+    }
+
+    /** Regresión de GC-504: sin franjas, el filtro AVAILABILITY de GC-474 dejaba a todos los técnicos del seed sin trabajo. */
+    @Test
+    void losTecnicosDeQaSonElegiblesDentroDeSuHorario() {
+        ZoneId bogota = ZoneId.of("America/Bogota");
+        // Un miércoles a media mañana y un domingo a las 21:59: los 7 días tienen horario.
+        Instant miercoles = ZonedDateTime.of(2026, 11, 11, 10, 0, 0, 0, bogota).toInstant();
+        Instant domingo = ZonedDateTime.of(2026, 11, 15, 21, 59, 0, 0, bogota).toInstant();
+        // Usuario, especialidad y ciudad de cada técnico, tal como los siembra qa_empresas.sql.
+        Object[][] tecnicos = {
+                {"7ec00000-0000-4000-8000-000000000001", ServiceCategory.PLUMBING, "Cali"},
+                {"7ec00000-0000-4000-8000-000000000002", ServiceCategory.ELECTRICAL, "Cali"},
+                {"7ec00000-0000-4000-8000-000000000003", ServiceCategory.PAINTING, "Palmira"},
+                {"7ec00000-0000-4000-8000-000000000004", ServiceCategory.LOCKSMITHING, "Palmira"},
+        };
+        for (Object[] tecnico : tecnicos) {
+            UUID userId = UUID.fromString((String) tecnico[0]);
+            for (Instant momento : List.of(miercoles, domingo)) {
+                assertThat(evaluar(userId, (ServiceCategory) tecnico[1], (String) tecnico[2], momento))
+                        .as("%s en %s", tecnico[0], momento)
+                        .isEmpty();
+            }
+        }
+    }
+
+    @Test
+    void fueraDelHorarioDeQaSigueSiendoNoElegible() {
+        ZoneId bogota = ZoneId.of("America/Bogota");
+        UUID tecnico1 = UUID.fromString("7ec00000-0000-4000-8000-000000000001");
+        Instant antes = ZonedDateTime.of(2026, 11, 11, 5, 59, 0, 0, bogota).toInstant();
+        Instant fin = ZonedDateTime.of(2026, 11, 11, 22, 0, 0, 0, bogota).toInstant(); // el fin es exclusivo
+        assertThat(evaluar(tecnico1, ServiceCategory.PLUMBING, "Cali", antes)).containsExactly(IneligibilityReason.AVAILABILITY);
+        assertThat(evaluar(tecnico1, ServiceCategory.PLUMBING, "Cali", fin)).containsExactly(IneligibilityReason.AVAILABILITY);
+    }
+
+    /** El seed no pisa un horario configurado a mano (como el que ya tenía QA) ni deja franjas solapadas ese día. */
+    @Test
+    void elSeedRespetaElHorarioQueUnTecnicoYaTeniaEseDia() {
+        UUID technicianId = jdbcTemplate.queryForObject(
+                "SELECT id FROM technicians WHERE user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)", UUID.class);
+        jdbcTemplate.update("DELETE FROM technician_availability WHERE technician_id = ? AND day_of_week = 'MONDAY'", technicianId);
+        jdbcTemplate.update("INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time) "
+                + "VALUES (?, ?, 'MONDAY', CAST('08:00:00' AS TIME), CAST('12:00:00' AS TIME))", UUID.randomUUID(), technicianId);
+        try {
+            new ResourceDatabasePopulator(new ClassPathResource("seed/qa_empresas.sql")).execute(dataSource);
+
+            Integer mondaySlots = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM technician_availability WHERE technician_id = ? AND day_of_week = 'MONDAY'",
+                    Integer.class, technicianId);
+            assertThat(mondaySlots).isEqualTo(1);
+        } finally {
+            // Deja la base como la dejó el seed para las demás pruebas.
+            jdbcTemplate.update("DELETE FROM technician_availability WHERE technician_id = ? AND day_of_week = 'MONDAY'", technicianId);
+            new ResourceDatabasePopulator(new ClassPathResource("seed/qa_empresas.sql")).execute(dataSource);
+        }
+        assertThat(count("technician_availability")).isEqualTo(28);
+    }
+
+    private List<IneligibilityReason> evaluar(UUID userId, ServiceCategory category, String city, Instant expectedAt) {
+        EligibilityRequest.RequestData request =
+                new EligibilityRequest.RequestData(UUID.randomUUID(), category, city, null, null, expectedAt);
+        EligibilityResponse.Result result = eligibilityService.evaluate(userId, List.of(request)).results().get(0);
+        return result.reasons();
     }
 
     @Test

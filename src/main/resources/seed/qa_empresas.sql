@@ -8,6 +8,7 @@
 --   empresa1@fixia-qa.test, empresa2@fixia-qa.test  -> empresas con 2 técnicos asociados cada una
 --   empresa3@fixia-qa.test                          -> empresa sin técnicos (lista vacía)
 --   tecnico1..4@fixia-qa.test                       -> técnicos asociados a empresa1 (1, 2) y empresa2 (3, 4)
+--                                                       con horario de lunes a domingo, 06:00-22:00 (GC-504)
 
 -- Cuentas de administradores de empresa
 INSERT INTO users (id, email, password_hash, role, status, first_name, last_name, document_type,
@@ -125,6 +126,177 @@ SELECT CAST('ca700000-0000-4000-8000-000000000006' AS UUID), t.id, 'LOCKSMITHING
 FROM technicians t
 WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)
   AND NOT EXISTS (SELECT 1 FROM technician_categories WHERE technician_id = t.id AND category = 'LOCKSMITHING');
+
+-- Disponibilidad (GC-504): lunes a domingo de 06:00 a 22:00, hora de Colombia, para los 4 técnicos. Sin franjas el técnico
+-- nunca es elegible (filtro AVAILABILITY de GC-474). Cada día se inserta solo si el técnico todavía no tiene ninguna
+-- franja ese día, así que no pisa un horario configurado a mano (QA ya lo tenía) ni crea franjas solapadas.
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000001000001' AS UUID), t.id, 'MONDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000001' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'MONDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000001000002' AS UUID), t.id, 'TUESDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000001' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'TUESDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000001000003' AS UUID), t.id, 'WEDNESDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000001' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'WEDNESDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000001000004' AS UUID), t.id, 'THURSDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000001' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'THURSDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000001000005' AS UUID), t.id, 'FRIDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000001' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'FRIDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000001000006' AS UUID), t.id, 'SATURDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000001' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SATURDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000001000007' AS UUID), t.id, 'SUNDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000001' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SUNDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000002000001' AS UUID), t.id, 'MONDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000002' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'MONDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000002000002' AS UUID), t.id, 'TUESDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000002' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'TUESDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000002000003' AS UUID), t.id, 'WEDNESDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000002' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'WEDNESDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000002000004' AS UUID), t.id, 'THURSDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000002' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'THURSDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000002000005' AS UUID), t.id, 'FRIDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000002' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'FRIDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000002000006' AS UUID), t.id, 'SATURDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000002' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SATURDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000002000007' AS UUID), t.id, 'SUNDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000002' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SUNDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000003000001' AS UUID), t.id, 'MONDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000003' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'MONDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000003000002' AS UUID), t.id, 'TUESDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000003' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'TUESDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000003000003' AS UUID), t.id, 'WEDNESDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000003' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'WEDNESDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000003000004' AS UUID), t.id, 'THURSDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000003' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'THURSDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000003000005' AS UUID), t.id, 'FRIDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000003' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'FRIDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000003000006' AS UUID), t.id, 'SATURDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000003' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SATURDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000003000007' AS UUID), t.id, 'SUNDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000003' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SUNDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000004000001' AS UUID), t.id, 'MONDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'MONDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000004000002' AS UUID), t.id, 'TUESDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'TUESDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000004000003' AS UUID), t.id, 'WEDNESDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'WEDNESDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000004000004' AS UUID), t.id, 'THURSDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'THURSDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000004000005' AS UUID), t.id, 'FRIDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'FRIDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000004000006' AS UUID), t.id, 'SATURDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SATURDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000004000007' AS UUID), t.id, 'SUNDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SUNDAY');
 
 -- Empresas
 INSERT INTO companies (id, admin_user_id, name, nit, created_at)
