@@ -8,7 +8,8 @@
 --   empresa1@fixia-qa.test, empresa2@fixia-qa.test  -> empresas con 2 técnicos asociados cada una
 --   empresa3@fixia-qa.test                          -> empresa sin técnicos (lista vacía)
 --   tecnico1..4@fixia-qa.test                       -> técnicos asociados a empresa1 (1, 2) y empresa2 (3, 4)
---                                                       con horario de lunes a domingo, 06:00-22:00 (GC-504)
+--   tecnico5@fixia-qa.test                          -> técnico independiente, sin empresa: sirve para probar invitaciones (GC-523)
+-- Los cinco técnicos tienen horario de lunes a domingo, 06:00-22:00 (GC-504).
 
 -- Cuentas de administradores de empresa
 INSERT INTO users (id, email, password_hash, role, status, first_name, last_name, document_type,
@@ -61,6 +62,13 @@ SELECT CAST('7ec00000-0000-4000-8000-000000000004' AS UUID), 'tecnico4@fixia-qa.
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID) OR email = 'tecnico4@fixia-qa.test'
                   OR (document_type = 'CC' AND document_number = '9200000004'));
 
+INSERT INTO users (id, email, password_hash, role, status, first_name, last_name, document_type,
+                   document_number, phone, consent_policy_version, consent_accepted_at, created_at)
+SELECT CAST('7ec00000-0000-4000-8000-000000000005' AS UUID), 'tecnico5@fixia-qa.test', '$2a$12$oh3moHHwe0SQECCNWLiH9ewo4XH/6B.ftCjyPJhzGK7CZ5YK2OmuO', 'PROFESSIONAL', 'ACTIVE', 'Mateo', 'Vargas', 'CC',
+       '9200000005', '+573002000005', '1.0', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID) OR email = 'tecnico5@fixia-qa.test'
+                  OR (document_type = 'CC' AND document_number = '9200000005'));
+
 -- Perfiles de técnico (verificados, con ciudad de cobertura)
 INSERT INTO technicians (id, user_id, verification_status, professional_description, years_of_experience,
                          coverage_city, created_at, updated_at)
@@ -89,6 +97,13 @@ SELECT CAST('7e000000-0000-4000-8000-000000000004' AS UUID), CAST('7ec00000-0000
        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
 WHERE EXISTS (SELECT 1 FROM users WHERE id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID))
   AND NOT EXISTS (SELECT 1 FROM technicians WHERE user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID));
+
+INSERT INTO technicians (id, user_id, verification_status, professional_description, years_of_experience,
+                         coverage_city, created_at, updated_at)
+SELECT CAST('7e000000-0000-4000-8000-000000000005' AS UUID), CAST('7ec00000-0000-4000-8000-000000000005' AS UUID), 'VALID', 'Mantenimiento general de viviendas. Independiente: sin empresa.', 3, 'Cali',
+       CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+WHERE EXISTS (SELECT 1 FROM users WHERE id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID))
+  AND NOT EXISTS (SELECT 1 FROM technicians WHERE user_id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID));
 
 -- Especialidades
 INSERT INTO technician_categories (id, technician_id, category)
@@ -127,7 +142,13 @@ FROM technicians t
 WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)
   AND NOT EXISTS (SELECT 1 FROM technician_categories WHERE technician_id = t.id AND category = 'LOCKSMITHING');
 
--- Disponibilidad (GC-504): lunes a domingo de 06:00 a 22:00, hora de Colombia, para los 4 técnicos. Sin franjas el técnico
+INSERT INTO technician_categories (id, technician_id, category)
+SELECT CAST('ca700000-0000-4000-8000-000000000007' AS UUID), t.id, 'MAINTENANCE'
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_categories WHERE technician_id = t.id AND category = 'MAINTENANCE');
+
+-- Disponibilidad (GC-504): lunes a domingo de 06:00 a 22:00, hora de Colombia, para los 5 técnicos. Sin franjas el técnico
 -- nunca es elegible (filtro AVAILABILITY de GC-474). Cada día se inserta solo si el técnico todavía no tiene ninguna
 -- franja ese día, así que no pisa un horario configurado a mano (QA ya lo tenía) ni crea franjas solapadas.
 INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
@@ -296,6 +317,48 @@ INSERT INTO technician_availability (id, technician_id, day_of_week, start_time,
 SELECT CAST('a7a00000-0000-4000-8000-000004000007' AS UUID), t.id, 'SUNDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
 FROM technicians t
 WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000004' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SUNDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000005000001' AS UUID), t.id, 'MONDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'MONDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000005000002' AS UUID), t.id, 'TUESDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'TUESDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000005000003' AS UUID), t.id, 'WEDNESDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'WEDNESDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000005000004' AS UUID), t.id, 'THURSDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'THURSDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000005000005' AS UUID), t.id, 'FRIDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'FRIDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000005000006' AS UUID), t.id, 'SATURDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID)
+  AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SATURDAY');
+
+INSERT INTO technician_availability (id, technician_id, day_of_week, start_time, end_time)
+SELECT CAST('a7a00000-0000-4000-8000-000005000007' AS UUID), t.id, 'SUNDAY', CAST('06:00:00' AS TIME), CAST('22:00:00' AS TIME)
+FROM technicians t
+WHERE t.user_id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID)
   AND NOT EXISTS (SELECT 1 FROM technician_availability a WHERE a.technician_id = t.id AND a.day_of_week = 'SUNDAY');
 
 -- Empresas
