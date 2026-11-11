@@ -442,9 +442,9 @@ paths:
       summary: Consultar la empresa del administrador autenticado (GC-466)
       description: |
         Solo con rol `COMPANY`. La empresa se resuelve siempre por la cuenta del token: la ruta no recibe ningún
-        identificador de empresa, así que una empresa no puede consultar otra. No hay registro público de empresas ni
-        ruta que asocie técnicos: las empresas y sus asociaciones se cargan de forma controlada (en QA, con el perfil
-        `seed-qa`).
+        identificador de empresa, así que una empresa no puede consultar otra. No hay registro público de empresas: las
+        empresas se cargan de forma controlada (en QA, con el perfil `seed-qa`). Los técnicos solo se vinculan por
+        invitación aceptada (GC-523 y GC-524, ver `/api/users/companies/me/invitations`).
       security:
         - bearerAuth: []
       responses:
@@ -497,6 +497,138 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+
+  /api/users/companies/me/invitations:
+    post:
+      summary: Invitar a un técnico independiente a la empresa (GC-523)
+      description: |
+        Solo con rol `COMPANY`. La empresa sale del token. Se invita por **correo exacto** a un técnico independiente:
+        cuenta `PROFESSIONAL` activa, con perfil de técnico y sin empresa. La invitación nace `PENDING` y vence a los
+        7 días (`fixia.companies.invitation-ttl`). Invitar **no vincula**: la asociación solo nace cuando el técnico
+        acepta (GC-524).
+
+        Si el correo no existe, no es de un técnico activo o el técnico ya tiene empresa, la respuesta es **la misma
+        422** en los tres casos, para no revelar qué cuentas existen ni con quién trabajan. Solo puede haber una
+        invitación `PENDING` por empresa y técnico; si la anterior ya venció, se puede volver a invitar.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+      responses:
+        '201':
+          description: Invitación creada y pendiente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyInvitation'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La cuenta tiene rol `COMPANY` pero no administra ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: 'Ya hay una invitación pendiente de esta empresa a ese técnico (`reasons: [INVITATION_ALREADY_PENDING]`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
+        '422':
+          description: >-
+            No se puede invitar a esa cuenta (`reasons: [NOT_INVITABLE]`). Mismo cuerpo para correo inexistente, cuenta
+            que no es de un técnico activo y técnico que ya tiene empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
+    get:
+      summary: Listar las invitaciones de la empresa autenticada (GC-523)
+      description: |
+        Solo con rol `COMPANY`. Las invitaciones de **esta** empresa, de la más reciente a la más antigua. `EXPIRED` no
+        se guarda: es una `PENDING` cuyo plazo ya pasó (o una vencida que se cerró al volver a invitar) y se calcula al
+        consultar. El filtro `status` usa ese estado calculado.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, EXPIRED]
+      responses:
+        '200':
+          description: Invitaciones de la empresa (lista vacía si no tiene).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyInvitationsResponse'
+        '400':
+          description: El valor de `status` no es válido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La cuenta tiene rol `COMPANY` pero no administra ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/users/companies/me/invitations/{id}:
+    delete:
+      summary: Cancelar una invitación pendiente (GC-523)
+      description: |
+        Solo con rol `COMPANY`. Cancela una invitación `PENDING` y vigente de esta empresa. Una invitación que no existe
+        o es de otra empresa responde 404 (no se distinguen). Una que ya no está pendiente (respondida, cancelada o
+        vencida) responde 409.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Invitación cancelada.
+        '400':
+          description: El identificador no es un UUID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La invitación no existe, es de otra empresa o la cuenta no administra ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: 'La invitación ya no está pendiente (`reasons: [INVITATION_NOT_PENDING]`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
 
   /internal/companies/technician-association:
     post:
@@ -1360,6 +1492,36 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PublicTechnicianProfile'
+
+    CreateInvitationRequest:
+      type: object
+      required: [technicianEmail]
+      properties:
+        technicianEmail: { type: string, format: email, maxLength: 254, example: tecnico5@fixia-qa.test }
+
+    CompanyInvitation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, EXPIRED]
+          description: Estado que se muestra; `EXPIRED` se calcula (pendiente con plazo vencido).
+        technician:
+          type: object
+          properties:
+            displayName: { type: string, example: 'Carlos G.', description: 'Nombre e inicial del apellido; nunca correo ni documento.' }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        respondedAt: { type: string, format: date-time, description: 'Solo cuando la invitación ya se cerró.' }
+
+    CompanyInvitationsResponse:
+      type: object
+      properties:
+        invitations:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompanyInvitation'
 
     TechnicianAssociationRequest:
       type: object

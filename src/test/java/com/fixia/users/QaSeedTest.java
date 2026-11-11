@@ -112,6 +112,29 @@ class QaSeedTest {
     }
 
     @Test
+    void tecnico5DeQaEsIndependienteYSePuedeInvitar() throws Exception {
+        // GC-523: el seed trae un técnico sin empresa para probar invitaciones de punta a punta.
+        Integer associated = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM company_technicians "
+                + "WHERE technician_user_id = CAST('7ec00000-0000-4000-8000-000000000005' AS UUID)", Integer.class);
+        assertThat(associated).isZero();
+
+        mockMvc.perform(post("/api/users/companies/me/invitations")
+                        .header(HttpHeaders.AUTHORIZATION, login("empresa3@fixia-qa.test"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("technicianEmail", "tecnico5@fixia-qa.test"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.technician.displayName").value("Mateo V."));
+        // Un técnico que ya tiene empresa no se puede invitar.
+        mockMvc.perform(post("/api/users/companies/me/invitations")
+                        .header(HttpHeaders.AUTHORIZATION, login("empresa3@fixia-qa.test"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("technicianEmail", "tecnico1@fixia-qa.test"))))
+                .andExpect(status().isUnprocessableEntity());
+        jdbcTemplate.update("DELETE FROM company_invitations");
+    }
+
+    @Test
     void elSeedNoDejaHuellaEnElHistorialDeFlyway() {
         // Regresión: como migración repetible quedaba en flyway_schema_history y, al quitar el perfil, el servicio no
         // arrancaba ("applied migration not resolved locally"). Solo deben figurar las migraciones versionadas.
@@ -132,11 +155,11 @@ class QaSeedTest {
         int companies = count("companies");
         int associations = count("company_technicians");
         int slots = count("technician_availability");
-        assertThat(users).isEqualTo(8); // 3 empresas, 4 técnicos y el ADMIN (GC-503)
-        assertThat(technicians).isEqualTo(4);
+        assertThat(users).isEqualTo(9); // 3 empresas, 5 técnicos y el ADMIN (GC-503)
+        assertThat(technicians).isEqualTo(5); // tecnico5 es independiente (GC-523)
         assertThat(companies).isEqualTo(3);
-        assertThat(associations).isEqualTo(4);
-        assertThat(slots).isEqualTo(28); // 4 técnicos x 7 días (GC-504)
+        assertThat(associations).isEqualTo(4); // y por eso no tiene asociación
+        assertThat(slots).isEqualTo(35); // 5 técnicos x 7 días (GC-504)
 
         new ResourceDatabasePopulator(new ClassPathResource("seed/qa_empresas.sql"),
                 new ClassPathResource("seed/qa_admin.sql")).execute(dataSource);
@@ -162,6 +185,7 @@ class QaSeedTest {
                 {"7ec00000-0000-4000-8000-000000000002", ServiceCategory.ELECTRICAL, "Cali"},
                 {"7ec00000-0000-4000-8000-000000000003", ServiceCategory.PAINTING, "Palmira"},
                 {"7ec00000-0000-4000-8000-000000000004", ServiceCategory.LOCKSMITHING, "Palmira"},
+                {"7ec00000-0000-4000-8000-000000000005", ServiceCategory.MAINTENANCE, "Cali"},
         };
         for (Object[] tecnico : tecnicos) {
             UUID userId = UUID.fromString((String) tecnico[0]);
@@ -203,7 +227,7 @@ class QaSeedTest {
             jdbcTemplate.update("DELETE FROM technician_availability WHERE technician_id = ? AND day_of_week = 'MONDAY'", technicianId);
             new ResourceDatabasePopulator(new ClassPathResource("seed/qa_empresas.sql")).execute(dataSource);
         }
-        assertThat(count("technician_availability")).isEqualTo(28);
+        assertThat(count("technician_availability")).isEqualTo(35);
     }
 
     private List<IneligibilityReason> evaluar(UUID userId, ServiceCategory category, String city, Instant expectedAt) {
