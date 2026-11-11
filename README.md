@@ -189,8 +189,24 @@ Identidad empresarial y técnicos asociados (GC-466, historia GC-464).
 - **Asociaciones.** `company_technicians` une una empresa con la cuenta de un técnico existente. Un técnico solo puede
   estar en **una** empresa (`uk_company_technicians_technician`) y debe tener perfil de técnico (clave foránea a
   `technicians.user_id`). No hay indicador de habilitación: si la cuenta del técnico se deshabilita, deja de aparecer.
-- **No hay forma de asociar por API.** Sin registro público de empresas, sin invitaciones ni ruta que vincule por id; así
-  nadie reclama una cuenta ajena por conocer su id. Las empresas y asociaciones se cargan de forma controlada.
+- **Nadie se vincula por id.** Sin registro público de empresas ni ruta que asocie por identificador; así nadie reclama
+  una cuenta ajena por conocer su id. Las empresas se cargan de forma controlada y la asociación solo nace de una
+  **invitación aceptada por el técnico** (GC-523 y GC-524; reglas del PO en `docs/contracts/empresas.md`).
+- **Invitaciones (GC-523).** Tabla `company_invitations` (V12) y, solo con rol `COMPANY` (la empresa sale del token):
+  - `POST /api/users/companies/me/invitations` `{technicianEmail}` → 201 `PENDING`. Se invita por **correo exacto** a un
+    técnico independiente (cuenta `PROFESSIONAL` activa, con perfil y sin empresa). Correo inexistente, cuenta que no es
+    de un técnico activo y técnico que ya tiene empresa dan la **misma 422** (`NOT_INVITABLE`), para no revelar cuentas.
+    Ya hay una pendiente de esa empresa a ese técnico: 409. Correo vacío o mal formado: 400.
+  - `GET /api/users/companies/me/invitations?status=` → las de **esta** empresa, de la más reciente a la más antigua.
+  - `DELETE /api/users/companies/me/invitations/{id}` → 204 si estaba pendiente y vigente; 409 si ya no; 404 si no existe
+    o es de otra empresa.
+  - Vence a los **7 días** (`FIXIA_COMPANIES_INVITATION_TTL`, por ejemplo `P3D`). `EXPIRED` no se guarda: se calcula al
+    leer; no hay proceso programado. Si se reinvita a quien tenía una vencida, la vieja se cierra como `CANCELLED` con
+    `cancel_reason = EXPIRED` y se sigue mostrando `EXPIRED`.
+  - Una sola `PENDING` por empresa y técnico, garantizada por la base (`uk_company_invitations_pending` sobre
+    `pending_marker`, que vale 1 solo mientras está pendiente; no se usa un índice parcial porque H2, el de las pruebas,
+    no los admite). Dos invitaciones simultáneas dejan una sola. Otra empresa sí puede invitar al mismo técnico.
+  - Invitar **no vincula**. Aceptar, rechazar y desvincularse son de GC-524.
 - **API (GC-466).** `GET /api/users/companies/me` y `GET /api/users/companies/me/technicians`, solo con rol `COMPANY`
   (cliente y técnico reciben 403). El listado devuelve los mismos campos permitidos del perfil público (GC-425) y su
   `userId` es el que ms-services usa para postular y seleccionar al ejecutor; sin técnicos, lista vacía.
@@ -232,6 +248,7 @@ y después de las migraciones. Nunca se activa en producción: crea cuentas con 
 | `empresa2@fixia-qa.test` | `COMPANY` | Mantenimientos del Valle: `tecnico3`, `tecnico4` |
 | `empresa3@fixia-qa.test` | `COMPANY` | Hogar Experto, sin técnicos (lista vacía) |
 | `tecnico1..4@fixia-qa.test` | `PROFESSIONAL` | Verificados, con especialidades, ciudad de cobertura y horario de lunes a domingo, 06:00–22:00 hora de Colombia (GC-504; sin franjas no serían elegibles, GC-474) |
+| `tecnico5@fixia-qa.test` | `PROFESSIONAL` | Técnico **independiente**, sin empresa y con el mismo horario: sirve para probar invitaciones (GC-523) |
 | `admin@fixia-qa.test` | `ADMIN` | Administrador de Fixia (GC-503), en `seed/qa_admin.sql`. Token con `ROLE_ADMIN`: reembolsos de ms-payments y consultas administrativas. El rol ADMIN no se obtiene por ningún registro público |
 
 Contraseña de todas las cuentas de QA: `FixiaQA#2026`.
