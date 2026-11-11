@@ -231,7 +231,7 @@ y después de las migraciones. Nunca se activa en producción: crea cuentas con 
 | `empresa1@fixia-qa.test` | `COMPANY` | Servicios Integrales Andina: `tecnico1`, `tecnico2` |
 | `empresa2@fixia-qa.test` | `COMPANY` | Mantenimientos del Valle: `tecnico3`, `tecnico4` |
 | `empresa3@fixia-qa.test` | `COMPANY` | Hogar Experto, sin técnicos (lista vacía) |
-| `tecnico1..4@fixia-qa.test` | `PROFESSIONAL` | Verificados, con especialidades y ciudad de cobertura |
+| `tecnico1..4@fixia-qa.test` | `PROFESSIONAL` | Verificados, con especialidades, ciudad de cobertura y horario de lunes a domingo, 06:00–22:00 hora de Colombia (GC-504; sin franjas no serían elegibles, GC-474) |
 | `admin@fixia-qa.test` | `ADMIN` | Administrador de Fixia (GC-503), en `seed/qa_admin.sql`. Token con `ROLE_ADMIN`: reembolsos de ms-payments y consultas administrativas. El rol ADMIN no se obtiene por ningún registro público |
 
 Contraseña de todas las cuentas de QA: `FixiaQA#2026`.
