@@ -442,9 +442,9 @@ paths:
       summary: Consultar la empresa del administrador autenticado (GC-466)
       description: |
         Solo con rol `COMPANY`. La empresa se resuelve siempre por la cuenta del token: la ruta no recibe ningún
-        identificador de empresa, así que una empresa no puede consultar otra. No hay registro público de empresas ni
-        ruta que asocie técnicos: las empresas y sus asociaciones se cargan de forma controlada (en QA, con el perfil
-        `seed-qa`).
+        identificador de empresa, así que una empresa no puede consultar otra. No hay registro público de empresas: las
+        empresas se cargan de forma controlada (en QA, con el perfil `seed-qa`). Los técnicos solo se vinculan por
+        invitación aceptada (GC-523 y GC-524, ver `/api/users/companies/me/invitations`).
       security:
         - bearerAuth: []
       responses:
@@ -497,6 +497,138 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/Problem'
+
+  /api/users/companies/me/invitations:
+    post:
+      summary: Invitar a un técnico independiente a la empresa (GC-523)
+      description: |
+        Solo con rol `COMPANY`. La empresa sale del token. Se invita por **correo exacto** a un técnico independiente:
+        cuenta `PROFESSIONAL` activa, con perfil de técnico y sin empresa. La invitación nace `PENDING` y vence a los
+        7 días (`fixia.companies.invitation-ttl`). Invitar **no vincula**: la asociación solo nace cuando el técnico
+        acepta (GC-524).
+
+        Si el correo no existe, no es de un técnico activo o el técnico ya tiene empresa, la respuesta es **la misma
+        422** en los tres casos, para no revelar qué cuentas existen ni con quién trabajan. Solo puede haber una
+        invitación `PENDING` por empresa y técnico; si la anterior ya venció, se puede volver a invitar.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvitationRequest'
+      responses:
+        '201':
+          description: Invitación creada y pendiente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyInvitation'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La cuenta tiene rol `COMPANY` pero no administra ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: 'Ya hay una invitación pendiente de esta empresa a ese técnico (`reasons: [INVITATION_ALREADY_PENDING]`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
+        '422':
+          description: >-
+            No se puede invitar a esa cuenta (`reasons: [NOT_INVITABLE]`). Mismo cuerpo para correo inexistente, cuenta
+            que no es de un técnico activo y técnico que ya tiene empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
+    get:
+      summary: Listar las invitaciones de la empresa autenticada (GC-523)
+      description: |
+        Solo con rol `COMPANY`. Las invitaciones de **esta** empresa, de la más reciente a la más antigua. `EXPIRED` no
+        se guarda: es una `PENDING` cuyo plazo ya pasó (o una vencida que se cerró al volver a invitar) y se calcula al
+        consultar. El filtro `status` usa ese estado calculado.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, EXPIRED]
+      responses:
+        '200':
+          description: Invitaciones de la empresa (lista vacía si no tiene).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyInvitationsResponse'
+        '400':
+          description: El valor de `status` no es válido.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La cuenta tiene rol `COMPANY` pero no administra ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
+  /api/users/companies/me/invitations/{id}:
+    delete:
+      summary: Cancelar una invitación pendiente (GC-523)
+      description: |
+        Solo con rol `COMPANY`. Cancela una invitación `PENDING` y vigente de esta empresa. Una invitación que no existe
+        o es de otra empresa responde 404 (no se distinguen). Una que ya no está pendiente (respondida, cancelada o
+        vencida) responde 409.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Invitación cancelada.
+        '400':
+          description: El identificador no es un UUID.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La invitación no existe, es de otra empresa o la cuenta no administra ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: 'La invitación ya no está pendiente (`reasons: [INVITATION_NOT_PENDING]`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
 
   /internal/companies/technician-association:
     post:
@@ -850,6 +982,86 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /api/users/admin/users:
+    get:
+      summary: Listar usuarios (ADMIN, GC-535)
+      description: |
+        Solo `ROLE_ADMIN`. Lista paginada por cursor, de la más reciente a la más antigua (`createdAt` y `id`
+        descendentes). No trae documento ni teléfono. Cada consulta queda en `admin_audit_events` (`USER_LIST`, con los
+        filtros usados). Contrato: `docs/contracts/admin.md` §3.1.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: role, in: query, schema: { type: string, enum: [CLIENT, PROFESSIONAL, COMPANY, ADMIN] } }
+        - { name: status, in: query, schema: { type: string, enum: [ACTIVE, DISABLED] } }
+        - { name: q, in: query, description: 'Busca en correo, nombre y apellido; 2 a 100 caracteres.', schema: { type: string, minLength: 2, maxLength: 100 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, description: 'El `nextCursor` de la página anterior.', schema: { type: string } }
+      responses:
+        '200':
+          description: Página de usuarios.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserPage'
+        '400':
+          description: Filtro, límite o cursor inválido.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/users/admin/users/{id}:
+    get:
+      summary: Detalle de un usuario (ADMIN, GC-535)
+      description: |
+        Solo `ROLE_ADMIN`. Agrega teléfono y documento enmascarado (solo los 4 últimos caracteres); si es técnico,
+        `verificationStatus`, y si es empresa, `companyName`. Se registra `USER_VIEW` (`NOT_FOUND` si no existe).
+        Contrato: `docs/contracts/admin.md` §3.2.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Usuario.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminUserDetail'
+        '400':
+          description: El id no es un UUID.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No existe un usuario con ese id.
+  /api/users/admin/audit-events:
+    get:
+      summary: Registro de acciones del ADMIN en ms-users (GC-535)
+      description: |
+        Solo `ROLE_ADMIN`. Del más reciente al más antiguo; la propia consulta se registra (`AUDIT_LIST`) después de
+        leer, así que no aparece en la página que devuelve. Contrato: `docs/contracts/admin.md` §3.3 y §5.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: adminId, in: query, schema: { type: string, format: uuid } }
+        - { name: action, in: query, schema: { type: string, enum: [USER_LIST, USER_VIEW, AUDIT_LIST] } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: cursor, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Página del registro.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminAuditPage'
+        '400':
+          description: Filtro, límite o cursor inválido.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 components:
   securitySchemes:
     bearerAuth:
@@ -913,6 +1125,51 @@ components:
             $ref: '#/components/schemas/ValidationProblem'
 
   schemas:
+    AdminUserSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string }
+        firstName: { type: string }
+        lastName: { type: string }
+        role: { type: string, enum: [CLIENT, PROFESSIONAL, COMPANY, ADMIN] }
+        status: { type: string, enum: [ACTIVE, DISABLED] }
+        createdAt: { type: string, format: date-time }
+    AdminUserPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminUserSummary' }
+        nextCursor: { type: string, nullable: true }
+    AdminUserDetail:
+      allOf:
+        - $ref: '#/components/schemas/AdminUserSummary'
+        - type: object
+          properties:
+            phone: { type: string }
+            documentType: { type: string }
+            documentNumberMasked: { type: string, example: '******4050' }
+            verificationStatus: { type: string, description: 'Solo si es técnico.' }
+            companyName: { type: string, description: 'Solo si es empresa.' }
+    AdminAuditEvent:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        adminId: { type: string, format: uuid }
+        action: { type: string, enum: [USER_LIST, USER_VIEW, AUDIT_LIST] }
+        targetType: { type: string, nullable: true, enum: [USER] }
+        targetId: { type: string, format: uuid, nullable: true }
+        details: { type: object, nullable: true, description: 'Filtros usados; nunca contraseñas, tokens ni documentos.' }
+        outcome: { type: string, enum: [OK, DENIED, CONFLICT, NOT_FOUND] }
+        occurredAt: { type: string, format: date-time }
+    AdminAuditPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminAuditEvent' }
+        nextCursor: { type: string, nullable: true }
     ClientRegistrationRequest:
       type: object
       required: [firstName, lastName, documentType, documentNumber, email, phone, password, policyVersion, consentAccepted]
@@ -958,6 +1215,18 @@ components:
           type: string
           pattern: '^\+?[0-9]{7,15}$'
           description: Con `+` opcional y de 7 a 15 dígitos.
+        address:
+          type: string
+          nullable: true
+          maxLength: 255
+          description: Opcional (GC-317). Ausente o en blanco deja el perfil sin dirección.
+          example: Calle 10 # 5-20, apto 301
+        city:
+          type: string
+          nullable: true
+          maxLength: 100
+          description: Opcional (GC-317). Ausente o en blanco queda vacía.
+          example: Bogotá
 
     ClientProfile:
       type: object
@@ -969,6 +1238,8 @@ components:
         documentType: { type: string, enum: [CC, CE, PASSPORT], description: Solo lectura. }
         documentNumber: { type: string, description: Solo lectura. }
         phone: { type: string }
+        address: { type: string, nullable: true, description: Dirección del cliente (GC-317); null si no la ha indicado. }
+        city: { type: string, nullable: true, description: Ciudad de la dirección (GC-317); null si no la indicó. }
         createdAt: { type: string, format: date-time }
 
     TechnicianRegistrationRequest:
@@ -1203,6 +1474,16 @@ components:
         id: { type: string, format: uuid }
         name: { type: string, example: Servicios Integrales Andina }
         nit: { type: string, nullable: true, description: Opcional; el MVP no lo valida. }
+        reputation:
+          type: object
+          nullable: true
+          description: >-
+            GC-551. Promedio simple de las reputaciones de los técnicos asociados actuales que tienen evaluaciones (sin
+            ponderar por cuántas tiene cada uno), redondeado a un decimal; count es el total de evaluaciones de esos
+            técnicos. null si ninguno tiene evaluaciones.
+          properties:
+            average: { type: number, example: 4.5 }
+            count: { type: integer, example: 12 }
 
     CompanyTechniciansResponse:
       type: object
@@ -1211,6 +1492,36 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/PublicTechnicianProfile'
+
+    CreateInvitationRequest:
+      type: object
+      required: [technicianEmail]
+      properties:
+        technicianEmail: { type: string, format: email, maxLength: 254, example: tecnico5@fixia-qa.test }
+
+    CompanyInvitation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, EXPIRED]
+          description: Estado que se muestra; `EXPIRED` se calcula (pendiente con plazo vencido).
+        technician:
+          type: object
+          properties:
+            displayName: { type: string, example: 'Carlos G.', description: 'Nombre e inicial del apellido; nunca correo ni documento.' }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        respondedAt: { type: string, format: date-time, description: 'Solo cuando la invitación ya se cerró.' }
+
+    CompanyInvitationsResponse:
+      type: object
+      properties:
+        invitations:
+          type: array
+          items:
+            $ref: '#/components/schemas/CompanyInvitation'
 
     TechnicianAssociationRequest:
       type: object
@@ -1244,6 +1555,16 @@ components:
             properties:
               companyAdminUserId: { type: string, format: uuid }
               name: { type: string, example: Servicios Integrales Andina }
+            reputation:
+              type: object
+              nullable: true
+              description: >-
+                GC-551. Promedio simple de las reputaciones de los técnicos asociados actuales que tienen evaluaciones (sin
+                ponderar por cuántas tiene cada uno), redondeado a un decimal; count es el total de evaluaciones de esos
+                técnicos. null si ninguno tiene evaluaciones.
+              properties:
+                average: { type: number, example: 4.5 }
+                count: { type: integer, example: 12 }
 
     CreateEvaluation:
       type: object

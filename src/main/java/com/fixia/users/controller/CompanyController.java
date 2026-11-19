@@ -26,7 +26,7 @@ public class CompanyController {
 
     @GetMapping
     public CompanyResponse get(@AuthenticationPrincipal Jwt jwt) {
-        return CompanyResponse.from(companyService.get(parseUserId(jwt)));
+        return companyService.getWithReputation(parseUserId(jwt));
     }
 
     @GetMapping("/technicians")
@@ -34,7 +34,7 @@ public class CompanyController {
         return companyService.listTechnicians(parseUserId(jwt));
     }
 
-    private static UUID parseUserId(Jwt jwt) {
+    static UUID parseUserId(Jwt jwt) {
         try {
             return TokenService.parseUserId(jwt.getSubject());
         } catch (RuntimeException e) {

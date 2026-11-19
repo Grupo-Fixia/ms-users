@@ -1,6 +1,5 @@
 package com.fixia.users.service;
 
-import com.fixia.users.domain.RevokedToken;
 import com.fixia.users.repository.RefreshTokenRepository;
 import com.fixia.users.repository.RevokedTokenRepository;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -36,7 +35,8 @@ public class LogoutService {
         Instant now = clock.instant();
         UUID userId = TokenService.parseUserId(accessToken.getSubject());
 
-        revokedTokenRepository.save(new RevokedToken(accessToken.getId(), accessToken.getExpiresAt(), now));
+        // Idempotente también ante cierres simultáneos del mismo token (GC-513): el segundo no rompe la llave.
+        revokedTokenRepository.revokeIfAbsent(accessToken.getId(), accessToken.getExpiresAt(), now);
 
         refreshTokenRepository.findByTokenHash(TokenHasher.sha256Hex(rawRefreshToken))
                 .filter(stored -> stored.getUserId().equals(userId))

@@ -12,4 +12,7 @@ public interface CompanyTechnicianRepository extends JpaRepository<CompanyTechni
     List<CompanyTechnician> findByCompanyIdOrderByCreatedAtAscIdAsc(UUID companyId);
 
     boolean existsByCompanyIdAndTechnicianUserId(UUID companyId, UUID technicianUserId);
+
+    /** Un técnico está en una sola empresa: sirve para saber si sigue siendo independiente (GC-523). */
+    boolean existsByTechnicianUserId(UUID technicianUserId);
 }

@@ -89,7 +89,9 @@ public class EvaluationService {
         if (!participation.isClosed()) {
             throw new EvaluationRejectedException(EvaluationRejectedException.SERVICE_NOT_CLOSED);
         }
-        if (participation.isCompanyProvider()) {
+        if (participation.isCompanyProvider() && participation.executorId() == null) {
+            // GC-551: un servicio de empresa se evalúa en su técnico ejecutor. Si ms-services no lo informa (versión
+            // anterior), no hay a quién atribuirlo y se rechaza como antes, sin evaluar a la cuenta de la empresa.
             throw new EvaluationRejectedException(EvaluationRejectedException.COMPANY_SERVICE_NOT_EVALUABLE);
         }
         if (now.isAfter(participation.closedAt().plus(properties.window()))) {
@@ -130,9 +132,9 @@ public class EvaluationService {
      */
     private static Side sideOf(Participation participation, UUID evaluatorId, Role role) {
         if (role == Role.CLIENT && evaluatorId.equals(participation.clientId())) {
-            return new Side(EvaluationDirection.CLIENT_TO_PROVIDER, participation.providerId());
+            return new Side(EvaluationDirection.CLIENT_TO_PROVIDER, participation.executor());
         }
-        if (role == Role.PROFESSIONAL && evaluatorId.equals(participation.providerId())) {
+        if (role == Role.PROFESSIONAL && evaluatorId.equals(participation.executor())) {
             return new Side(EvaluationDirection.PROVIDER_TO_CLIENT, participation.clientId());
         }
         throw new EvaluableServiceNotFoundException();
