@@ -5,6 +5,11 @@ metadata:
   namespace: apps
 spec:
   replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2
+      maxUnavailable: 0
   selector:
     matchLabels: { app: ms-users }
   template:
