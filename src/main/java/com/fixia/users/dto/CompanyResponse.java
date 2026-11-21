@@ -5,9 +5,10 @@ import com.fixia.users.domain.Company;
 import java.util.UUID;
 
 /** Datos de la empresa que administra la cuenta autenticada (GC-466). */
-public record CompanyResponse(UUID id, String name, String nit) {
+public record CompanyResponse(UUID id, String name, String nit, Reputation reputation) {
 
-    public static CompanyResponse from(Company company) {
-        return new CompanyResponse(company.getId(), company.getName(), company.getNit());
+    /** {@code reputation} (GC-551): promedio simple de sus técnicos actuales con evaluaciones; {@code null} si ninguno. */
+    public static CompanyResponse from(Company company, Reputation reputation) {
+        return new CompanyResponse(company.getId(), company.getName(), company.getNit(), reputation);
     }
 }

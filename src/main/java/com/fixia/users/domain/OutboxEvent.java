@@ -25,6 +25,13 @@ import java.util.UUID;
 public class OutboxEvent implements Persistable<UUID> {
 
     public static final int MAX_PAYLOAD_LENGTH = 16000;
+    public static final int MAX_ERROR_LENGTH = 500;
+
+    /** Intentos de publicación antes de dejar el evento en {@code FAILED} (GC-500, igual que ms-services). */
+    public static final int MAX_ATTEMPTS = 10;
+
+    /** Espera máxima entre reintentos. */
+    public static final java.time.Duration MAX_BACKOFF = java.time.Duration.ofMinutes(5);
 
     @Id
     @Column(name = "event_id", nullable = false, updatable = false)
@@ -113,6 +120,51 @@ public class OutboxEvent implements Persistable<UUID> {
                 topic, messageKey, payload, occurredAt);
     }
 
+    /**
+     * Kafka confirmó la publicación (GC-500). Repetirlo no cambia nada; un evento {@code FAILED} no se publica sin
+     * reactivarlo antes.
+     */
+    public void markPublished(Instant now) {
+        if (status == OutboxStatus.PUBLISHED) {
+            return;
+        }
+        if (status == OutboxStatus.FAILED) {
+            throw new IllegalStateException("Un evento fallido se reactiva antes de publicarlo");
+        }
+        this.status = OutboxStatus.PUBLISHED;
+        this.publishedAt = now;
+        this.lastError = null;
+    }
+
+    /**
+     * La publicación falló (GC-500): se cuenta el intento y se programa el siguiente con espera exponencial (2, 4, 8...
+     * segundos, máximo {@link #MAX_BACKOFF}). Al llegar a {@link #MAX_ATTEMPTS} queda {@code FAILED}. El error se recorta
+     * a {@link #MAX_ERROR_LENGTH} caracteres y nunca debe incluir el contenido del evento.
+     */
+    public void registerFailedAttempt(String error, Instant now) {
+        if (status == OutboxStatus.PUBLISHED) {
+            throw new IllegalStateException("El evento ya está publicado");
+        }
+        this.attempts++;
+        this.lastError = truncate(error);
+        if (attempts >= MAX_ATTEMPTS) {
+            this.status = OutboxStatus.FAILED;
+        } else {
+            this.nextAttemptAt = now.plus(backoff(attempts));
+        }
+    }
+
+    static java.time.Duration backoff(int attempts) {
+        return attempts >= 9 ? MAX_BACKOFF : java.time.Duration.ofSeconds(1L << attempts);
+    }
+
+    private static String truncate(String error) {
+        if (error == null) {
+            return null;
+        }
+        return error.length() <= MAX_ERROR_LENGTH ? error : error.substring(0, MAX_ERROR_LENGTH);
+    }
+
     private static void require(boolean condition, String message) {
         if (!condition) {
             throw new IllegalArgumentException(message);
@@ -175,5 +227,17 @@ public class OutboxEvent implements Persistable<UUID> {
 
     public int getAttempts() {
         return attempts;
+    }
+
+    public Instant getNextAttemptAt() {
+        return nextAttemptAt;
+    }
+
+    public String getLastError() {
+        return lastError;
+    }
+
+    public Instant getPublishedAt() {
+        return publishedAt;
     }
 }

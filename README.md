@@ -6,6 +6,10 @@ Registro de clientes y técnicos, inicio y cierre de sesión, y perfil profesion
 Contrato de la API: [`docs/openapi.yaml`](docs/openapi.yaml). Evaluaciones y reputación (GC-443, se implementan en
 GC-444 y GC-446): [`docs/contracts/evaluaciones.md`](docs/contracts/evaluaciones.md), con su evento en
 [`docs/events`](docs/events/README.md).
+Administración mínima del ADMIN de Fixia (GC-534, la implementan GC-535 y GC-536):
+[`docs/contracts/admin.md`](docs/contracts/admin.md).
+Empresas: invitaciones, desvinculación de técnicos y técnico designado que cotiza y ejecuta (GC-516, GC-551):
+[`docs/contracts/empresas.md`](docs/contracts/empresas.md).
 
 ## Pruebas
 
@@ -77,13 +81,16 @@ rm /tmp/jwt-private.pem /tmp/jwt-public.pem
 - `UserRepository#findByIdAndRole` permite obtener la cuenta solo si es del rol esperado (un técnico no entra por la
   ruta de cliente).
 - La edición es de último escritor gana (sin `@Version`): son tres campos del propio titular.
+- **Dirección (GC-317, migración V10).** `address` (máx. 255) y `city` (máx. 100), opcionales, en `GET` y `PUT`.
+  `PUT` también las reemplaza: ausentes o en blanco quedan vacías, así que el cliente debe reenviar la dirección
+  actual si no la quiere borrar. El frontend la usa para proponer la dirección exacta al publicar una solicitud.
 - **API (GC-317).** `GET` y `PUT /api/users/clients/me/profile`, solo con rol `CLIENT` (un técnico recibe 403, igual
   que un cliente en las rutas de técnico). El cliente sale siempre del token, nunca de la ruta ni del cuerpo: nadie
   puede ver ni editar el perfil de otro. `PUT` reemplaza nombre, apellido y teléfono (mismas reglas que el registro:
   nombre y apellido se guardan sin espacios sobrantes; un teléfono con espacios se rechaza);
   si algún dato es inválido responde 400 y la cuenta no cambia. Cualquier otro campo del cuerpo (correo, documento,
   rol, estado) se ignora. `GET` devuelve `id`, `email`, `firstName`, `lastName`, `documentType`, `documentNumber`,
-  `phone` y `createdAt`; nunca el hash de la contraseña, el rol, el estado ni el consentimiento. Si la cuenta ya no
+  `phone`, `address`, `city` y `createdAt`; nunca el hash de la contraseña, el rol, el estado ni el consentimiento. Si la cuenta ya no
   existe, está deshabilitada o la sesión se cerró, la respuesta es el mismo 401 de cualquier token inválido. Los
   DTO no imprimen datos personales en `toString()`.
 
@@ -206,7 +213,7 @@ Identidad empresarial y técnicos asociados (GC-466, historia GC-464).
 
 ### Datos de QA (perfil `seed-qa`)
 
-`seed/qa_empresas.sql` es un script **idempotente** que carga `QaSeedLoader` al arrancar, solo con el perfil `seed-qa`
+`seed/qa_empresas.sql` y `seed/qa_admin.sql` son scripts **idempotentes** que carga `QaSeedLoader` al arrancar, solo con el perfil `seed-qa`
 y después de las migraciones. Nunca se activa en producción: crea cuentas con una contraseña conocida. En Docker,
 `SPRING_PROFILES_ACTIVE=seed-qa` en el servicio `ms-users` del entorno.
 
@@ -225,5 +232,6 @@ y después de las migraciones. Nunca se activa en producción: crea cuentas con 
 | `empresa2@fixia-qa.test` | `COMPANY` | Mantenimientos del Valle: `tecnico3`, `tecnico4` |
 | `empresa3@fixia-qa.test` | `COMPANY` | Hogar Experto, sin técnicos (lista vacía) |
 | `tecnico1..4@fixia-qa.test` | `PROFESSIONAL` | Verificados, con especialidades y ciudad de cobertura |
+| `admin@fixia-qa.test` | `ADMIN` | Administrador de Fixia (GC-503), en `seed/qa_admin.sql`. Token con `ROLE_ADMIN`: reembolsos de ms-payments y consultas administrativas. El rol ADMIN no se obtiene por ningún registro público |
 
 Contraseña de todas las cuentas de QA: `FixiaQA#2026`.

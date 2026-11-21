@@ -35,21 +35,21 @@ class QaSeedProfileToggleTest {
     void quitarElPerfilNoImpideArrancarNiBorraLasCuentasYVolverAPonerloNoDuplica() {
         try (ConfigurableApplicationContext seeded = start("test", "seed-qa")) {
             assertThat(seeded.getBeansOfType(QaSeedLoader.class)).hasSize(1);
-            assertThat(count(seeded, "users")).isEqualTo(7);
+            assertThat(count(seeded, "users")).isEqualTo(8);
             assertThat(count(seeded, "company_technicians")).isEqualTo(4);
         }
 
         try (ConfigurableApplicationContext withoutProfile = start("test")) {
             assertThat(withoutProfile.getBeansOfType(QaSeedLoader.class)).isEmpty();
             // Las cuentas ya cargadas se conservan: el servicio arrancó con las mismas migraciones validadas.
-            assertThat(count(withoutProfile, "users")).isEqualTo(7);
+            assertThat(count(withoutProfile, "users")).isEqualTo(8);
             assertThat(withoutProfile.getBean(JdbcTemplate.class).queryForObject(
                     "SELECT COUNT(*) FROM flyway_schema_history WHERE version IS NOT NULL", Integer.class))
                     .isEqualTo(QaSeedTest.versionedMigrations());
         }
 
         try (ConfigurableApplicationContext again = start("test", "seed-qa")) {
-            assertThat(count(again, "users")).isEqualTo(7);
+            assertThat(count(again, "users")).isEqualTo(8);
             assertThat(count(again, "companies")).isEqualTo(3);
             assertThat(count(again, "company_technicians")).isEqualTo(4);
         }

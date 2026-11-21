@@ -16,7 +16,7 @@ import javax.sql.DataSource;
 import java.sql.Connection;
 
 /**
- * Carga las cuentas y relaciones de QA de empresas y técnicos (GC-466), solo con el perfil {@code seed-qa}. Sin ese perfil
+ * Carga las cuentas y relaciones de QA de empresas y técnicos (GC-466) y la cuenta ADMIN de QA (GC-503), solo con el perfil {@code seed-qa}. Sin ese perfil
  * el bean no existe, así que en producción no hay forma de cargarlas por accidente: crean cuentas con una contraseña
  * conocida.
  *
@@ -31,6 +31,9 @@ import java.sql.Connection;
 public class QaSeedLoader implements ApplicationRunner {
 
     static final String SCRIPT = "seed/qa_empresas.sql";
+
+    /** Cuenta ADMIN de QA (GC-503), en su propio script para no mezclarla con los datos de empresas. */
+    static final String ADMIN_SCRIPT = "seed/qa_admin.sql";
 
     private static final Logger log = LoggerFactory.getLogger(QaSeedLoader.class);
 
@@ -48,11 +51,12 @@ public class QaSeedLoader implements ApplicationRunner {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             Connection connection = DataSourceUtils.getConnection(dataSource);
             try {
-                new ResourceDatabasePopulator(new ClassPathResource(SCRIPT)).populate(connection);
+                new ResourceDatabasePopulator(new ClassPathResource(SCRIPT), new ClassPathResource(ADMIN_SCRIPT))
+                        .populate(connection);
             } finally {
                 DataSourceUtils.releaseConnection(connection, dataSource);
             }
         });
-        log.info("Datos de QA de empresas y técnicos cargados ({}).", SCRIPT);
+        log.info("Datos de QA cargados ({}, {}).", SCRIPT, ADMIN_SCRIPT);
     }
 }

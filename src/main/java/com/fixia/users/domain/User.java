@@ -18,6 +18,8 @@ public class User {
 
     public static final int NAME_MAX_LENGTH = 100;
     public static final int PHONE_MAX_LENGTH = 20;
+    public static final int ADDRESS_MAX_LENGTH = 255;
+    public static final int CITY_MAX_LENGTH = 100;
 
     /** Teléfono en formato internacional opcional (+57...), solo dígitos, entre 7 y 15. */
     public static final String PHONE_REGEX = "^\\+?[0-9]{7,15}$";
@@ -55,6 +57,14 @@ public class User {
 
     @Column(nullable = false, length = 20)
     private String phone;
+
+    /** Dirección del cliente (GC-317), opcional. */
+    @Column(length = ADDRESS_MAX_LENGTH)
+    private String address;
+
+    /** Ciudad de la dirección (GC-317), opcional. */
+    @Column(length = CITY_MAX_LENGTH)
+    private String city;
 
     @Column(name = "consent_policy_version", nullable = false, length = 20)
     private String consentPolicyVersion;
@@ -97,6 +107,28 @@ public class User {
      *
      * @throws IllegalArgumentException si algún dato falta o no cumple el formato; la cuenta queda sin cambios
      */
+    /**
+     * Reemplaza la dirección y la ciudad del perfil (GC-317). Las dos son opcionales: {@code null} o en blanco las deja
+     * vacías. Se guardan sin espacios a los lados; si alguna supera su largo máximo no cambia nada.
+     */
+    public void updateAddress(String address, String city) {
+        String newAddress = optionalText(address, "La dirección", ADDRESS_MAX_LENGTH);
+        String newCity = optionalText(city, "La ciudad", CITY_MAX_LENGTH);
+        this.address = newAddress;
+        this.city = newCity;
+    }
+
+    private static String optionalText(String value, String field, int maxLength) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String clean = value.strip();
+        if (clean.length() > maxLength) {
+            throw new IllegalArgumentException(field + " no puede superar " + maxLength + " caracteres");
+        }
+        return clean;
+    }
+
     public void updateContactInfo(String firstName, String lastName, String phone) {
         String newFirstName = requireText(firstName, "El nombre", NAME_MAX_LENGTH);
         String newLastName = requireText(lastName, "El apellido", NAME_MAX_LENGTH);
@@ -159,6 +191,14 @@ public class User {
 
     public String getPhone() {
         return phone;
+    }
+
+    public String getAddress() {
+        return address;
+    }
+
+    public String getCity() {
+        return city;
     }
 
     public String getConsentPolicyVersion() {

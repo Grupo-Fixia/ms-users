@@ -1,5 +1,6 @@
 package com.fixia.users;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -117,18 +118,35 @@ class QaSeedTest {
         int categories = count("technician_categories");
         int companies = count("companies");
         int associations = count("company_technicians");
-        assertThat(users).isEqualTo(7);
+        assertThat(users).isEqualTo(8); // 3 empresas, 4 técnicos y el ADMIN (GC-503)
         assertThat(technicians).isEqualTo(4);
         assertThat(companies).isEqualTo(3);
         assertThat(associations).isEqualTo(4);
 
-        new ResourceDatabasePopulator(new ClassPathResource("seed/qa_empresas.sql")).execute(dataSource);
+        new ResourceDatabasePopulator(new ClassPathResource("seed/qa_empresas.sql"),
+                new ClassPathResource("seed/qa_admin.sql")).execute(dataSource);
 
         assertThat(count("users")).isEqualTo(users);
         assertThat(count("technicians")).isEqualTo(technicians);
         assertThat(count("technician_categories")).isEqualTo(categories);
         assertThat(count("companies")).isEqualTo(companies);
         assertThat(count("company_technicians")).isEqualTo(associations);
+    }
+
+    @Test
+    void elAdminDeQaIniciaSesionConRolAdmin() throws Exception {
+        String token = login("admin@fixia-qa.test").substring("Bearer ".length());
+        JsonNode claims = objectMapper.readTree(
+                java.util.Base64.getUrlDecoder().decode(token.split("\\.")[1]));
+        assertThat(claims.get("roles")).hasSize(1);
+        assertThat(claims.get("roles").get(0).asText()).isEqualTo("ROLE_ADMIN");
+
+        mockMvc.perform(get("/api/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("ADMIN"));
+        // No es administrador de empresa: las rutas de empresa siguen cerradas para él.
+        mockMvc.perform(get("/api/users/companies/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isForbidden());
     }
 
     /** Migraciones versionadas del servicio: así la prueba no se rompe cada vez que se agrega una (GC-444). */
