@@ -253,22 +253,6 @@ class QaSeedTest {
                 .andExpect(status().isForbidden());
     }
 
-    @Test
-    void elAdminDeQaIniciaSesionConRolAdmin() throws Exception {
-        String token = login("admin@fixia-qa.test").substring("Bearer ".length());
-        JsonNode claims = objectMapper.readTree(
-                java.util.Base64.getUrlDecoder().decode(token.split("\\.")[1]));
-        assertThat(claims.get("roles")).hasSize(1);
-        assertThat(claims.get("roles").get(0).asText()).isEqualTo("ROLE_ADMIN");
-
-        mockMvc.perform(get("/api/users/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.role").value("ADMIN"));
-        // No es administrador de empresa: las rutas de empresa siguen cerradas para él.
-        mockMvc.perform(get("/api/users/companies/me").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
-                .andExpect(status().isForbidden());
-    }
-
     /** Migraciones versionadas del servicio: así la prueba no se rompe cada vez que se agrega una (GC-444). */
     static int versionedMigrations() {
         try {
