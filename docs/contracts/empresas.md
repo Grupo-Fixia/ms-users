@@ -54,11 +54,15 @@ Tabla `company_invitations`:
 | `status` | `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED` |
 | `created_at`, `expires_at` | Vence a los **7 días** (configurable con `fixia.companies.invitation-ttl`) |
 | `responded_at` | Cuándo pasó a otro estado |
-| `cancel_reason` | `BY_COMPANY` o `JOINED_OTHER_COMPANY` |
+| `cancel_reason` | `BY_COMPANY`, `JOINED_OTHER_COMPANY` o `EXPIRED` (GC-523: la vencida que se cierra al volver a invitar al mismo técnico) |
+| `pending_marker` | `1` solo mientras está `PENDING`, `NULL` en los demás estados (GC-523) |
 
-- Índice único parcial: **una sola invitación `PENDING`** por empresa y técnico.
+- **Una sola invitación `PENDING`** por empresa y técnico: `UNIQUE (company_id, technician_user_id, pending_marker)`. Se
+  implementó con la columna `pending_marker` y no con un índice único parcial (`WHERE status = 'PENDING'`) porque H2, que
+  usan las pruebas, no admite índices parciales; los `NULL` no chocan entre sí, así que las resueltas se acumulan.
 - **Vencida** = `PENDING` con `expires_at` pasado. Se calcula al leer (se muestra como `EXPIRED`), así que no hace falta
-  ningún proceso programado.
+  ningún proceso programado. Si la empresa vuelve a invitar a quien tenía una vencida, esa fila se cierra como
+  `CANCELLED` con `cancel_reason = EXPIRED` (para liberar la restricción única) y se sigue mostrando `EXPIRED`.
 
 Tabla `company_membership_events` (historial, solo inserción): `id`, `company_id`, `technician_user_id`, `type` (`JOINED`
 o `LEFT`), `invitation_id` (en `JOINED`) y `occurred_at`.
