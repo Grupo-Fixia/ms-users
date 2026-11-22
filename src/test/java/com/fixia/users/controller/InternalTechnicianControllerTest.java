@@ -72,6 +72,12 @@ class InternalTechnicianControllerTest {
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    @Autowired
+    private com.fixia.users.repository.CompanyRepository companyRepository;
+
+    @Autowired
+    private com.fixia.users.repository.CompanyTechnicianRepository associationRepository;
+
     @BeforeEach
     void cleanDatabase() {
         userRepository.deleteAllInBatch();
@@ -136,7 +142,27 @@ class InternalTechnicianControllerTest {
                 .andExpect(header().string(HttpHeaders.CACHE_CONTROL, containsString("no-store")))
                 .andExpect(jsonPath("$.results[0].requestId").value(requestId.toString()))
                 .andExpect(jsonPath("$.results[0].eligible").value(true))
-                .andExpect(jsonPath("$.results[0].reasons", empty()));
+                .andExpect(jsonPath("$.results[0].reasons", empty()))
+                .andExpect(jsonPath("$.results[0].companyMember").value(false));
+    }
+
+    @Test
+    void unTecnicoDeUnaEmpresaSigueElegibleYSeInformaQuePerteneceAElla() throws Exception {
+        UUID technician = bogotaPlumber();
+        UUID admin = user("empresa@example.com", "900100200", Role.COMPANY);
+        com.fixia.users.domain.Company company = companyRepository.save(
+                new com.fixia.users.domain.Company(admin, "Servicios Andina", "900100200", Instant.now()));
+        associationRepository.save(new com.fixia.users.domain.CompanyTechnician(company.getId(), technician,
+                Instant.now()));
+
+        evaluate(technician, List.of(request(UUID.randomUUID(), "PLUMBING", "bogota", 4.66, -74.06, MONDAY_9AM),
+                request(UUID.randomUUID(), "ELECTRICAL", "bogota", 4.66, -74.06, MONDAY_9AM)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.results[0].eligible").value(true))
+                .andExpect(jsonPath("$.results[0].reasons", empty()))
+                .andExpect(jsonPath("$.results[0].companyMember").value(true))
+                .andExpect(jsonPath("$.results[1].reasons", contains("CATEGORY")))
+                .andExpect(jsonPath("$.results[1].companyMember").value(true));
     }
 
     @Test

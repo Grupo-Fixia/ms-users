@@ -7,6 +7,7 @@ import com.fixia.users.domain.UserStatus;
 import com.fixia.users.domain.VerificationStatus;
 import com.fixia.users.dto.EligibilityRequest;
 import com.fixia.users.dto.EligibilityResponse;
+import com.fixia.users.repository.CompanyTechnicianRepository;
 import com.fixia.users.repository.TechnicianRepository;
 import com.fixia.users.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Value;
@@ -33,24 +34,29 @@ public class TechnicianEligibilityService {
 
     private final UserRepository userRepository;
     private final TechnicianRepository technicianRepository;
+    private final CompanyTechnicianRepository associationRepository;
     private final boolean requireVerified;
 
     public TechnicianEligibilityService(UserRepository userRepository, TechnicianRepository technicianRepository,
+                                        CompanyTechnicianRepository associationRepository,
                                         @Value("${fixia.eligibility.require-verified:false}") boolean requireVerified) {
         this.userRepository = userRepository;
         this.technicianRepository = technicianRepository;
+        this.associationRepository = associationRepository;
         this.requireVerified = requireVerified;
     }
 
     @Transactional(readOnly = true)
     public EligibilityResponse evaluate(UUID userId, List<EligibilityRequest.RequestData> requests) {
         Optional<Technician> technician = activeTechnician(userId);
+        // D9 del contrato de empresas: se informa aparte y no como motivo, porque la empresa también consulta así.
+        boolean companyMember = technician.isPresent() && associationRepository.existsByTechnicianUserId(userId);
         List<EligibilityResponse.Result> results = new ArrayList<>();
         for (EligibilityRequest.RequestData request : requests) {
             List<IneligibilityReason> reasons = technician
                     .map(found -> reasons(found, request))
                     .orElse(List.of(IneligibilityReason.TECHNICIAN_NOT_FOUND));
-            results.add(new EligibilityResponse.Result(request.requestId(), reasons.isEmpty(), reasons));
+            results.add(new EligibilityResponse.Result(request.requestId(), reasons.isEmpty(), reasons, companyMember));
         }
         return new EligibilityResponse(results);
     }
