@@ -100,6 +100,21 @@ public class CompanyInvitation {
         close(InvitationStatus.CANCELLED, InvitationCancelReason.EXPIRED, now);
     }
 
+    /** El técnico la aceptó (GC-524). Quien llama comprueba antes {@link #isOpen} y crea la asociación. */
+    public void accept(Instant now) {
+        close(InvitationStatus.ACCEPTED, null, now);
+    }
+
+    /** El técnico la rechazó (GC-524). Quien llama comprueba antes {@link #isOpen}. */
+    public void reject(Instant now) {
+        close(InvitationStatus.REJECTED, null, now);
+    }
+
+    /** El técnico aceptó la de otra empresa: sus demás invitaciones abiertas se cancelan (GC-524). */
+    public void cancelBecauseJoinedOtherCompany(Instant now) {
+        close(InvitationStatus.CANCELLED, InvitationCancelReason.JOINED_OTHER_COMPANY, now);
+    }
+
     private void close(InvitationStatus newStatus, InvitationCancelReason reason, Instant now) {
         if (status != InvitationStatus.PENDING) {
             throw new IllegalStateException("Solo una invitación pendiente puede cambiar de estado");

@@ -207,6 +207,25 @@ Identidad empresarial y técnicos asociados (GC-466, historia GC-464).
     `pending_marker`, que vale 1 solo mientras está pendiente; no se usa un índice parcial porque H2, el de las pruebas,
     no los admite). Dos invitaciones simultáneas dejan una sola. Otra empresa sí puede invitar al mismo técnico.
   - Invitar **no vincula**. Aceptar, rechazar y desvincularse son de GC-524.
+- **El técnico ante las invitaciones (GC-524).** Solo con rol `PROFESSIONAL` (el técnico sale del token):
+  - `GET /api/users/technicians/me/invitations` → sus invitaciones pendientes y vigentes de empresas activas, con el
+    nombre de la empresa.
+  - `POST /api/users/technicians/me/invitations/{id}/accept` → 200 `{company: {name}, joinedAt}`. En una transacción
+    crea la asociación, marca la invitación `ACCEPTED`, cancela sus demás invitaciones abiertas
+    (`JOINED_OTHER_COMPANY`), registra `JOINED` en `company_membership_events` (V13) y escribe
+    `empresa.tecnico_vinculado`. 409 si ya no está pendiente (`INVITATION_NOT_PENDING`), si ya tiene empresa
+    (`ALREADY_IN_COMPANY`) o si la empresa ya no está activa (`COMPANY_UNAVAILABLE`); 404 si es de otro técnico. Antes
+    de tocar nada bloquea todas sus invitaciones pendientes en orden, así dos aceptaciones simultáneas se esperan y
+    queda una sola asociación.
+  - `POST /api/users/technicians/me/invitations/{id}/reject` → 200 `REJECTED`; 409 si ya no está pendiente.
+  - `GET /api/users/technicians/me/company` → `{company: {name}, joinedAt}` o 404 si es independiente.
+  - `DELETE /api/users/technicians/me/company` → se desvincula. Antes pregunta a ms-services
+    (`POST /internal/services/company-executors/workload`) y a ms-payments (`POST /internal/payments/held`, en lotes de
+    500); con trabajo pendiente o dinero retenido responde 409 `{reasons: [PENDING_WORK, HELD_BALANCE],
+    serviceRequestIds}` y no cambia nada; si alguno no responde, 503. Si todo está libre: 204, borra la asociación,
+    registra `LEFT` y escribe `empresa.tecnico_desvinculado`. La empresa **no** desvincula.
+  - ms-payments se configura con `FIXIA_PAYMENTS_BASE_URL` (por defecto `http://ms-payments:8080`),
+    `FIXIA_PAYMENTS_CONNECT_TIMEOUT` y `FIXIA_PAYMENTS_READ_TIMEOUT`; usa la misma `INTERNAL_API_KEY`.
 - **API (GC-466).** `GET /api/users/companies/me` y `GET /api/users/companies/me/technicians`, solo con rol `COMPANY`
   (cliente y técnico reciben 403). El listado devuelve los mismos campos permitidos del perfil público (GC-425) y su
   `userId` es el que ms-services usa para postular y seleccionar al ejecutor; sin técnicos, lista vacía.
