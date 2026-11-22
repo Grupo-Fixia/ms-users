@@ -36,8 +36,8 @@ import java.util.stream.Collectors;
  * token ({@link CompanyService#get}), nunca de un identificador de la petición, y toda búsqueda de invitaciones va
  * acotada a esa empresa: un actor ajeno no ve ni toca las de otra.
  *
- * <p>Esta clase solo crea, lista y cancela. Aceptar, rechazar y desvincular (que crean y borran la asociación) son de
- * GC-524.
+ * <p>Esta clase solo crea, lista y cancela. Aceptar, rechazar y desvincular (que crean y borran la asociación) están
+ * en {@link TechnicianMembershipService} (GC-524).
  */
 @Service
 public class CompanyInvitationService {
@@ -122,7 +122,8 @@ public class CompanyInvitationService {
     @Transactional
     public void cancel(UUID adminUserId, UUID invitationId) {
         Company company = companyService.get(adminUserId);
-        CompanyInvitation invitation = invitationRepository.findByIdAndCompanyId(invitationId, company.getId())
+        // Bloqueada: si el técnico la está aceptando a la vez, uno de los dos ve que ya no está pendiente (GC-524).
+        CompanyInvitation invitation = invitationRepository.findLockedByIdAndCompanyId(invitationId, company.getId())
                 .orElseThrow(InvitationNotFoundException::new);
         Instant now = clock.instant();
         if (!invitation.isOpen(now)) {
