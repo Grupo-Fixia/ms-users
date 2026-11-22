@@ -203,6 +203,12 @@ secuencia 1 al vincular y 2 al desvincular, y `correlationId` es esa misma asoci
   **409** «Perteneces a una empresa: te postulas a través de ella», y `GET /api/services/opportunities` le devuelve una
   página vacía (D9). `ms-services` lo sabe por la elegibilidad que ya consulta a `ms-users`, que agrega el motivo
   `COMPANY_MEMBER`.
+  - **Implementado así:** cada resultado de la elegibilidad de `ms-users` trae `companyMember`, aparte de `reasons`.
+    Va aparte porque la misma consulta se usa cuando la empresa propone a ese técnico, y ahí debe seguir siendo
+    elegible.
+  - `ms-services` responde el 409 con `reasons: [COMPANY_MEMBER]` solo en la postulación propia, y corta las
+    oportunidades en cuanto lo ve.
+  - Un `ms-users` anterior no envía el campo y todo sigue como antes.
 - **Reputación de la empresa** (decisión del 2026-11-06): promedio simple de las reputaciones de sus técnicos asociados
   **actuales** que tengan evaluaciones. Si un técnico se va, deja de contar; sus evaluaciones siguen siendo suyas.
 - **Datos de QA:** las asociaciones del seed se conservan. Para probar invitaciones hace falta un técnico independiente
