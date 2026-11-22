@@ -630,6 +630,164 @@ paths:
               schema:
                 $ref: '#/components/schemas/EvaluationProblem'
 
+  /api/users/technicians/me/invitations:
+    get:
+      summary: Invitaciones que recibió el técnico autenticado (GC-524)
+      description: |
+        Solo con rol `PROFESSIONAL`. El técnico sale del token. Devuelve las invitaciones `PENDING` y vigentes de
+        empresas cuya cuenta sigue activa, de la más reciente a la más antigua. De la empresa solo se muestra el nombre.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Invitaciones abiertas (lista vacía si no tiene).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceivedInvitationsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/users/technicians/me/invitations/{id}/accept:
+    post:
+      summary: Aceptar una invitación y unirse a la empresa (GC-524)
+      description: |
+        Solo con rol `PROFESSIONAL`. En una transacción: crea la asociación con la empresa, marca la invitación
+        `ACCEPTED`, cancela las demás invitaciones abiertas del técnico (`JOINED_OTHER_COMPANY`), registra `JOINED` en el
+        historial y escribe el evento `empresa.tecnico_vinculado` en el Outbox. Un técnico pertenece a una sola empresa:
+        dos aceptaciones simultáneas dejan una sola asociación.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: El técnico quedó en la empresa.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianMembership'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La invitación no existe o es de otro técnico (no se distinguen).
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: >-
+            `reasons: [INVITATION_NOT_PENDING]` si ya se respondió, se canceló o venció;
+            `[ALREADY_IN_COMPANY]` si el técnico ya pertenece a una empresa;
+            `[COMPANY_UNAVAILABLE]` si la cuenta de la empresa ya no está activa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
+
+  /api/users/technicians/me/invitations/{id}/reject:
+    post:
+      summary: Rechazar una invitación (GC-524)
+      description: Solo con rol `PROFESSIONAL`. La invitación pasa a `REJECTED`; la asociación no cambia.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Invitación rechazada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceivedInvitation'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: La invitación no existe o es de otro técnico.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: 'La invitación ya no está pendiente (`reasons: [INVITATION_NOT_PENDING]`).'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/EvaluationProblem'
+
+  /api/users/technicians/me/company:
+    get:
+      summary: Empresa a la que pertenece el técnico (GC-524)
+      description: Solo con rol `PROFESSIONAL`. 404 si el técnico es independiente.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: La empresa del técnico y desde cuándo pertenece a ella.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TechnicianMembership'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: El técnico no pertenece a ninguna empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+    delete:
+      summary: Desvincularse de la empresa (GC-524)
+      description: |
+        Solo con rol `PROFESSIONAL`; la empresa **no** puede desvincular a un técnico. Antes de borrar la asociación,
+        ms-users pregunta a ms-services por el trabajo pendiente del técnico con la empresa
+        (`POST /internal/services/company-executors/workload`) y a ms-payments por el dinero retenido en los servicios
+        que ejecutó (`POST /internal/payments/held`). Si hay algo, responde 409 con los motivos y no cambia nada. Si
+        alguno no responde, 503 y tampoco cambia nada. Si todo está libre, en una transacción borra la asociación,
+        registra `LEFT` en el historial y escribe `empresa.tecnico_desvinculado` en el Outbox. Las postulaciones y
+        servicios anteriores siguen siendo de la empresa.
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: El técnico quedó independiente.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: El técnico ya es independiente.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: Tiene trabajo pendiente o saldo retenido con la empresa.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/LeaveBlockedProblem'
+        '503':
+          description: ms-services o ms-payments no respondieron; no se desvincula.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+
   /internal/companies/technician-association:
     post:
       summary: Consultar si un técnico pertenece a la empresa de un administrador (GC-466, interna)
@@ -1522,6 +1680,51 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/CompanyInvitation'
+
+    ReceivedInvitation:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [PENDING, ACCEPTED, REJECTED, CANCELLED, EXPIRED]
+        company:
+          type: object
+          properties:
+            name: { type: string, example: 'Servicios Andina' }
+        createdAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+        respondedAt: { type: string, format: date-time, description: 'Solo cuando la invitación ya se respondió.' }
+
+    ReceivedInvitationsResponse:
+      type: object
+      properties:
+        invitations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceivedInvitation'
+
+    TechnicianMembership:
+      type: object
+      properties:
+        company:
+          type: object
+          properties:
+            name: { type: string, example: 'Servicios Andina' }
+        joinedAt: { type: string, format: date-time }
+
+    LeaveBlockedProblem:
+      allOf:
+        - $ref: '#/components/schemas/Problem'
+        - type: object
+          properties:
+            reasons:
+              type: array
+              items: { type: string, enum: [PENDING_WORK, HELD_BALANCE] }
+            serviceRequestIds:
+              type: array
+              description: Solicitudes que impiden desvincularse (trabajo vivo o pagos retenidos).
+              items: { type: string, format: uuid }
 
     TechnicianAssociationRequest:
       type: object
