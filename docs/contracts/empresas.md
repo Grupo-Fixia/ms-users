@@ -54,14 +54,19 @@ Tabla `company_invitations`:
 | `status` | `PENDING`, `ACCEPTED`, `REJECTED`, `CANCELLED` |
 | `created_at`, `expires_at` | Vence a los **7 días** (configurable con `fixia.companies.invitation-ttl`) |
 | `responded_at` | Cuándo pasó a otro estado |
-| `cancel_reason` | `BY_COMPANY` o `JOINED_OTHER_COMPANY` |
+| `cancel_reason` | `BY_COMPANY`, `JOINED_OTHER_COMPANY` o `EXPIRED` (GC-523: la vencida que se cierra al volver a invitar al mismo técnico) |
+| `pending_marker` | `1` solo mientras está `PENDING`, `NULL` en los demás estados (GC-523) |
 
-- Índice único parcial: **una sola invitación `PENDING`** por empresa y técnico.
+- **Una sola invitación `PENDING`** por empresa y técnico: `UNIQUE (company_id, technician_user_id, pending_marker)`. Se
+  implementó con la columna `pending_marker` y no con un índice único parcial (`WHERE status = 'PENDING'`) porque H2, que
+  usan las pruebas, no admite índices parciales; los `NULL` no chocan entre sí, así que las resueltas se acumulan.
 - **Vencida** = `PENDING` con `expires_at` pasado. Se calcula al leer (se muestra como `EXPIRED`), así que no hace falta
-  ningún proceso programado.
+  ningún proceso programado. Si la empresa vuelve a invitar a quien tenía una vencida, esa fila se cierra como
+  `CANCELLED` con `cancel_reason = EXPIRED` (para liberar la restricción única) y se sigue mostrando `EXPIRED`.
 
-Tabla `company_membership_events` (historial, solo inserción): `id`, `company_id`, `technician_user_id`, `type` (`JOINED`
-o `LEFT`), `invitation_id` (en `JOINED`) y `occurred_at`.
+Tabla `company_membership_events` (historial, solo inserción, V13 de GC-524): `id`, `membership_id` (la fila de
+`company_technicians` que nació o se borró: une un `JOINED` con su `LEFT`), `company_id`, `technician_user_id`, `type`
+(`JOINED` o `LEFT`), `invitation_id` (solo en `JOINED`) y `occurred_at`.
 
 ## 4. API de la empresa (`ROLE_COMPANY`)
 
@@ -105,11 +110,17 @@ En **una transacción**:
 4. Cancela sus demás invitaciones pendientes con `JOINED_OTHER_COMPANY`.
 5. Registra `JOINED` en el historial.
 
+Antes del paso 1 se bloquean **todas** las invitaciones pendientes del técnico, ordenadas por id (GC-524): aceptar
+cancela las demás, así que sin ese orden dos aceptaciones simultáneas se bloquearían mutuamente. Con él, la segunda
+espera y encuentra su invitación ya cancelada (409). La empresa que cancela bloquea la fila de su invitación, así que
+cancelar y aceptar a la vez tampoco se pisan.
+
 Respuestas:
 
 - **200** `{company: {name}, joinedAt}`.
-- **409** si ya pertenece a una empresa (la restricción única también lo resuelve con dos aceptaciones simultáneas) o si
-  la invitación ya no está pendiente o venció.
+- **409** con `reasons`: `ALREADY_IN_COMPANY` si ya pertenece a una empresa (la restricción única también lo resuelve);
+  `INVITATION_NOT_PENDING` si la invitación ya no está pendiente o venció; `COMPANY_UNAVAILABLE` si la cuenta de la
+  empresa ya no está activa (GC-524).
 - **404** si no existe o es de otro técnico.
 
 ### 5.3 `POST /api/users/technicians/me/invitations/{id}/reject`
@@ -176,6 +187,10 @@ escritos en la misma transacción que el cambio:
 | `empresa.tecnico_desvinculado` v1 | Al desvincularse (§5.5) | `companyId`, `companyAdminUserId`, `technicianUserId`, `leftAt` |
 
 Sin correo, nombre ni documento. Los esquemas JSON van en `docs/events` con sus ejemplos.
+
+Implementado en GC-524: el agregado es la asociación (`CompanyMembership`, `id` = `company_technicians.id`), con
+secuencia 1 al vincular y 2 al desvincular, y `correlationId` es esa misma asociación. `actor` es el técnico con rol
+`PROFESSIONAL`. El tópico lo crea Kafka al primer envío (como los demás); el lakehouse debe suscribirse para conservarlo.
 
 ## 7. Efectos en el resto del sistema
 
