@@ -1,106 +1,64 @@
 package com.fixia.users.client;
 
-import com.fixia.users.config.InternalApiKeyFilter;
-import com.fixia.users.config.InternalApiProperties;
-import com.fixia.users.exception.ServicesUnavailableException;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.MediaType;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fixia.users.replication.ReplicatedStates;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
- * Lo que necesita ms-users antes de dejar que un técnico se desvincule de su empresa (GC-524, contrato de empresas §6):
- * su trabajo pendiente, que sabe ms-services, y el dinero retenido, que sabe ms-payments. Ninguna base ajena se lee
- * (Database per Service). Si alguno no responde bien, se lanza {@link ServicesUnavailableException} y no se desvincula:
- * falla cerrado, igual que la verificación de las evaluaciones.
+ * Trabajo y dinero retenido de un técnico con su empresa, para decidir si puede desvincularse (GC-524, contrato de
+ * empresas §6). Desde GC-547 no se pregunta a ms-services ni a ms-payments: se leen las réplicas locales de
+ * {@code ejecutor.carga} (ms-services, {@code fixia.services.executor-workloads}) y {@code pago.retencion}
+ * (ms-payments, {@code fixia.payments.held-services}).
+ *
+ * <p>Las copias pueden ir unos segundos atrasadas. Si en ese lapso la empresa logra contratar al técnico, ms-services lo
+ * detecta al recibir la desvinculación (compensación de GC-547) y el caso queda para el administrador.
  */
 @Component
 public class CompanyWorkloadClient {
 
-    /** Máximo de solicitudes que ms-payments acepta por consulta. */
-    static final int HELD_BATCH = 500;
+    public static final String WORKLOAD_TYPE = "ejecutor.carga";
+    public static final String HELD_TYPE = "pago.retencion";
 
-    /** Respuesta de ms-services (§6.1). */
     public record Workload(List<UUID> pendingServiceRequestIds, List<UUID> serviceRequestIds) {
     }
 
-    record WorkloadRequest(UUID companyAdminUserId, UUID technicianUserId) {
+    private final ReplicatedStates states;
+
+    public CompanyWorkloadClient(ReplicatedStates states) {
+        this.states = states;
     }
 
-    record HeldRequest(UUID providerId, List<UUID> serviceRequestIds) {
-    }
-
-    record HeldResponse(List<UUID> heldServiceRequestIds) {
-    }
-
-    private final RestClient servicesClient;
-    private final RestClient paymentsClient;
-    private final InternalApiProperties internalApiProperties;
-
-    public CompanyWorkloadClient(@Qualifier("servicesRestClient") RestClient servicesClient,
-                                 @Qualifier("paymentsRestClient") RestClient paymentsClient,
-                                 InternalApiProperties internalApiProperties) {
-        this.servicesClient = servicesClient;
-        this.paymentsClient = paymentsClient;
-        this.internalApiProperties = internalApiProperties;
-    }
-
-    /** Trabajo del técnico con la empresa, según ms-services. */
+    /** Postulaciones pendientes y servicios en que fue el seleccionado, de ese técnico con esa empresa. */
     public Workload workload(UUID companyAdminUserId, UUID technicianUserId) {
-        Workload workload;
-        try {
-            workload = servicesClient.post()
-                    .uri("/internal/services/company-executors/workload")
-                    .header(InternalApiKeyFilter.HEADER, apiKey())
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(new WorkloadRequest(companyAdminUserId, technicianUserId))
-                    .retrieve()
-                    .body(Workload.class);
-        } catch (RestClientException e) {
-            throw new ServicesUnavailableException("ms-services no pudo verificar el trabajo del técnico", e);
-        }
-        if (workload == null || workload.pendingServiceRequestIds() == null || workload.serviceRequestIds() == null) {
-            throw new ServicesUnavailableException("ms-services respondió un trabajo incompleto", null);
-        }
-        return workload;
+        List<UUID> pending = new ArrayList<>();
+        List<UUID> all = new ArrayList<>();
+        states.find(WORKLOAD_TYPE, technicianUserId).ifPresent(state -> {
+            for (JsonNode company : state.path("companies")) {
+                if (companyAdminUserId.toString().equals(company.path("companyAdminUserId").asText())) {
+                    company.path("pendingServiceRequestIds").forEach(id -> pending.add(UUID.fromString(id.asText())));
+                    company.path("serviceRequestIds").forEach(id -> all.add(UUID.fromString(id.asText())));
+                }
+            }
+        });
+        return new Workload(List.copyOf(pending), List.copyOf(all));
     }
 
-    /**
-     * De esas solicitudes, las que tienen dinero de la empresa retenido o por retener, según ms-payments. Se pregunta en
-     * lotes de {@value #HELD_BATCH}; sin solicitudes no hay nada que preguntar.
-     */
+    /** De esos servicios, en cuáles la empresa tiene dinero retenido. */
     public List<UUID> held(UUID companyAdminUserId, List<UUID> serviceRequestIds) {
-        List<UUID> ids = List.copyOf(new LinkedHashSet<>(serviceRequestIds));
+        Map<UUID, JsonNode> found = states.findAll(HELD_TYPE, new LinkedHashSet<>(serviceRequestIds));
         List<UUID> held = new ArrayList<>();
-        for (int from = 0; from < ids.size(); from += HELD_BATCH) {
-            List<UUID> batch = ids.subList(from, Math.min(ids.size(), from + HELD_BATCH));
-            HeldResponse response;
-            try {
-                response = paymentsClient.post()
-                        .uri("/internal/payments/held")
-                        .header(InternalApiKeyFilter.HEADER, apiKey())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .body(new HeldRequest(companyAdminUserId, batch))
-                        .retrieve()
-                        .body(HeldResponse.class);
-            } catch (RestClientException e) {
-                throw new ServicesUnavailableException("ms-payments no pudo verificar el dinero retenido", e);
+        found.forEach((serviceRequestId, state) -> {
+            if (state.path("held").asBoolean(false)
+                    && companyAdminUserId.toString().equals(state.path("providerId").asText())) {
+                held.add(serviceRequestId);
             }
-            if (response == null || response.heldServiceRequestIds() == null) {
-                throw new ServicesUnavailableException("ms-payments respondió una consulta incompleta", null);
-            }
-            held.addAll(response.heldServiceRequestIds());
-        }
+        });
         return held;
-    }
-
-    private String apiKey() {
-        return internalApiProperties.apiKey() == null ? "" : internalApiProperties.apiKey();
     }
 }
