@@ -26,7 +26,8 @@
       "enum": [
         "evaluacion.registrada",
         "empresa.tecnico_vinculado",
-        "empresa.tecnico_desvinculado"
+        "empresa.tecnico_desvinculado",
+        "sesion.revocada"
       ]
     },
     "schemaVersion": {
@@ -52,7 +53,8 @@
           "type": "string",
           "enum": [
             "Evaluation",
-            "CompanyMembership"
+            "CompanyMembership",
+            "Session"
           ]
         },
         "id": {
@@ -91,6 +93,8 @@
           "enum": [
             "CLIENT",
             "PROFESSIONAL",
+            "COMPANY",
+            "ADMIN",
             "SYSTEM"
           ]
         }
