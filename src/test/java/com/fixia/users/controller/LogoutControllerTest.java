@@ -6,6 +6,8 @@ import com.fixia.users.domain.DocumentType;
 import com.fixia.users.domain.RevokedToken;
 import com.fixia.users.domain.Role;
 import com.fixia.users.domain.User;
+import com.fixia.users.domain.OutboxEvent;
+import com.fixia.users.repository.OutboxEventRepository;
 import com.fixia.users.repository.RefreshTokenRepository;
 import com.fixia.users.repository.RevokedTokenRepository;
 import com.fixia.users.repository.UserRepository;
@@ -66,6 +68,9 @@ class LogoutControllerTest {
     private RevokedTokenRepository revokedTokenRepository;
 
     @Autowired
+    private OutboxEventRepository outboxRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -76,6 +81,7 @@ class LogoutControllerTest {
 
     @BeforeEach
     void cleanDatabase() {
+        outboxRepository.deleteAllInBatch();
         revokedTokenRepository.deleteAll();
         refreshTokenRepository.deleteAll();
         userRepository.deleteAll();
@@ -109,6 +115,32 @@ class LogoutControllerTest {
         RevokedToken revoked = revokedTokenRepository.findById(jwt.getId()).orElseThrow();
         assertThat(revoked.getExpiresAt()).isEqualTo(jwt.getExpiresAt());
         assertThat(revoked.getRevokedAt()).isNotNull();
+    }
+
+    @Test
+    void cerrarSesionPublicaSesionRevocadaParaLaListaDeRespaldo() throws Exception {
+        createUser("ana@example.com", "1020304050");
+        JsonNode session = login("ana@example.com");
+        Jwt jwt = jwtDecoder.decode(session.get("accessToken").asText());
+
+        logout(session, session.get("refreshToken").asText()).andExpect(status().isNoContent());
+
+        // GC-547: un solo evento, en el Outbox de la misma transacción, con lo justo para la lista.
+        List<OutboxEvent> events = outboxRepository.findAll();
+        assertThat(events).hasSize(1);
+        OutboxEvent outbox = events.get(0);
+        assertThat(outbox.getEventType()).isEqualTo("sesion.revocada");
+        assertThat(outbox.getTopic()).isEqualTo("fixia.users.sessions");
+        assertThat(outbox.getMessageKey()).isEqualTo(jwt.getId());
+        JsonNode event = objectMapper.readTree(outbox.getPayload());
+        assertThat(event.at("/aggregate/type").asText()).isEqualTo("Session");
+        assertThat(event.at("/aggregate/id").asText()).isEqualTo(jwt.getId());
+        assertThat(event.at("/actor/role").asText()).isEqualTo("CLIENT");
+        assertThat(event.at("/data/jti").asText()).isEqualTo(jwt.getId());
+        assertThat(Instant.parse(event.at("/data/expiresAt").asText())).isEqualTo(jwt.getExpiresAt());
+        assertThat(event.get("data").size()).isEqualTo(3);
+        assertThat(outbox.getPayload()).doesNotContain(session.get("accessToken").asText())
+                .doesNotContain("ana@example.com");
     }
 
     @Test

@@ -1,0 +1,22 @@
+{
+  "eventId": "4b5c6d7e-8f90-4a1b-8c2d-3e4f5a6b7c8d",
+  "eventType": "sesion.revocada",
+  "schemaVersion": 1,
+  "occurredAt": "2026-11-23T11:00:00Z",
+  "producer": "ms-users",
+  "aggregate": {
+    "type": "Session",
+    "id": "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a",
+    "sequence": 1
+  },
+  "correlationId": "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a",
+  "actor": {
+    "userId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+    "role": "CLIENT"
+  },
+  "data": {
+    "jti": "9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a",
+    "expiresAt": "2026-11-23T11:12:30Z",
+    "revokedAt": "2026-11-23T11:00:00Z"
+  }
+}

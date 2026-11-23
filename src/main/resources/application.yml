@@ -32,8 +32,29 @@ spring:
       properties:
         enable.idempotence: true
         max.in.flight.requests.per.connection: 5
+    # Consumidor de los estados replicados de ms-services y ms-payments (GC-547). Confirmación manual: el offset se
+    # confirma solo después de guardar la copia local (al menos una vez).
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+      auto-offset-reset: earliest
+    listener:
+      ack-mode: manual_immediate
 
 fixia:
+  replication:
+    # Cero dependencias síncronas (GC-547): ms-users publica el estado de técnicos y empresas, y guarda copia del que
+    # publican ms-services (participación y trabajo de los técnicos de empresa) y ms-payments (dinero retenido).
+    refresh: ${FIXIA_REPLICATION_REFRESH:PT6H}
+    publisher:
+      enabled: ${FIXIA_REPLICATION_PUBLISHER_ENABLED:true}
+      interval-ms: ${FIXIA_REPLICATION_INTERVAL_MS:3000}
+    consumer:
+      enabled: ${FIXIA_REPLICATION_CONSUMER_ENABLED:true}
+      topics: ${FIXIA_REPLICATION_TOPICS:fixia.services.participations,fixia.services.executor-workloads,fixia.payments.held-services}
+      group-id: ${FIXIA_REPLICATION_CONSUMER_GROUP:ms-users-replication}
+      retry-delay-ms: ${FIXIA_REPLICATION_RETRY_DELAY_MS:5000}
   jwt:
     issuer: ${JWT_ISSUER:https://auth.fixia.com}
     audience: ${JWT_AUDIENCE:https://api.fixia.com}

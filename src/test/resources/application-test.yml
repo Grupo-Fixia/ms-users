@@ -8,6 +8,14 @@ spring:
     bootstrap-servers: localhost:9092
 
 fixia:
+  replication:
+    # Las pruebas llaman al publicador y al manejador directamente.
+    publisher:
+      enabled: false
+    consumer:
+      enabled: false
+      topics: fixia.services.participations
+      group-id: ms-users-test
   outbox:
     relay:
       enabled: false
