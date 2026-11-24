@@ -1,5 +1,6 @@
 package com.fixia.users.dto;
 
+import com.fixia.users.config.CredentialCipher;
 import com.fixia.users.domain.DocumentType;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
@@ -47,6 +48,10 @@ public record TechnicianRegistrationRequest(
         @AssertTrue(message = "Debe aceptar el tratamiento de datos personales")
         boolean consentAccepted
 ) {
+
+    public TechnicianRegistrationRequest {
+        password = CredentialCipher.decryptIfEncrypted(password);
+    }
 
     /** Evita que la contraseña aparezca en logs si el objeto se imprime. */
     @Override

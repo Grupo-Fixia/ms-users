@@ -1,5 +1,6 @@
 package com.fixia.users.dto;
 
+import com.fixia.users.config.CredentialCipher;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
@@ -12,6 +13,10 @@ public record LoginRequest(
         @Size(max = 128, message = "La contraseña no puede superar 128 caracteres")
         String password
 ) {
+
+    public LoginRequest {
+        password = CredentialCipher.decryptIfEncrypted(password);
+    }
 
     /** Evita que la contraseña aparezca en logs si el objeto se imprime. */
     @Override
