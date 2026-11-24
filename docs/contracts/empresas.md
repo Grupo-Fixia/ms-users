@@ -64,8 +64,9 @@ Tabla `company_invitations`:
   ningún proceso programado. Si la empresa vuelve a invitar a quien tenía una vencida, esa fila se cierra como
   `CANCELLED` con `cancel_reason = EXPIRED` (para liberar la restricción única) y se sigue mostrando `EXPIRED`.
 
-Tabla `company_membership_events` (historial, solo inserción): `id`, `company_id`, `technician_user_id`, `type` (`JOINED`
-o `LEFT`), `invitation_id` (en `JOINED`) y `occurred_at`.
+Tabla `company_membership_events` (historial, solo inserción, V13 de GC-524): `id`, `membership_id` (la fila de
+`company_technicians` que nació o se borró: une un `JOINED` con su `LEFT`), `company_id`, `technician_user_id`, `type`
+(`JOINED` o `LEFT`), `invitation_id` (solo en `JOINED`) y `occurred_at`.
 
 ## 4. API de la empresa (`ROLE_COMPANY`)
 
@@ -109,11 +110,17 @@ En **una transacción**:
 4. Cancela sus demás invitaciones pendientes con `JOINED_OTHER_COMPANY`.
 5. Registra `JOINED` en el historial.
 
+Antes del paso 1 se bloquean **todas** las invitaciones pendientes del técnico, ordenadas por id (GC-524): aceptar
+cancela las demás, así que sin ese orden dos aceptaciones simultáneas se bloquearían mutuamente. Con él, la segunda
+espera y encuentra su invitación ya cancelada (409). La empresa que cancela bloquea la fila de su invitación, así que
+cancelar y aceptar a la vez tampoco se pisan.
+
 Respuestas:
 
 - **200** `{company: {name}, joinedAt}`.
-- **409** si ya pertenece a una empresa (la restricción única también lo resuelve con dos aceptaciones simultáneas) o si
-  la invitación ya no está pendiente o venció.
+- **409** con `reasons`: `ALREADY_IN_COMPANY` si ya pertenece a una empresa (la restricción única también lo resuelve);
+  `INVITATION_NOT_PENDING` si la invitación ya no está pendiente o venció; `COMPANY_UNAVAILABLE` si la cuenta de la
+  empresa ya no está activa (GC-524).
 - **404** si no existe o es de otro técnico.
 
 ### 5.3 `POST /api/users/technicians/me/invitations/{id}/reject`
@@ -181,6 +188,10 @@ escritos en la misma transacción que el cambio:
 
 Sin correo, nombre ni documento. Los esquemas JSON van en `docs/events` con sus ejemplos.
 
+Implementado en GC-524: el agregado es la asociación (`CompanyMembership`, `id` = `company_technicians.id`), con
+secuencia 1 al vincular y 2 al desvincular, y `correlationId` es esa misma asociación. `actor` es el técnico con rol
+`PROFESSIONAL`. El tópico lo crea Kafka al primer envío (como los demás); el lakehouse debe suscribirse para conservarlo.
+
 ## 7. Efectos en el resto del sistema
 
 - **Ver oportunidades y postularse por la empresa:** solo con técnicos asociados **en ese momento**. Ya es así:
@@ -192,6 +203,12 @@ Sin correo, nombre ni documento. Los esquemas JSON van en `docs/events` con sus 
   **409** «Perteneces a una empresa: te postulas a través de ella», y `GET /api/services/opportunities` le devuelve una
   página vacía (D9). `ms-services` lo sabe por la elegibilidad que ya consulta a `ms-users`, que agrega el motivo
   `COMPANY_MEMBER`.
+  - **Implementado así:** cada resultado de la elegibilidad de `ms-users` trae `companyMember`, aparte de `reasons`.
+    Va aparte porque la misma consulta se usa cuando la empresa propone a ese técnico, y ahí debe seguir siendo
+    elegible.
+  - `ms-services` responde el 409 con `reasons: [COMPANY_MEMBER]` solo en la postulación propia, y corta las
+    oportunidades en cuanto lo ve.
+  - Un `ms-users` anterior no envía el campo y todo sigue como antes.
 - **Reputación de la empresa** (decisión del 2026-11-06): promedio simple de las reputaciones de sus técnicos asociados
   **actuales** que tengan evaluaciones. Si un técnico se va, deja de contar; sus evaluaciones siguen siendo suyas.
 - **Datos de QA:** las asociaciones del seed se conservan. Para probar invitaciones hace falta un técnico independiente
