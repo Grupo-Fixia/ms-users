@@ -38,6 +38,8 @@ import java.util.stream.Collectors;
  *
  * <p>Esta clase solo crea, lista y cancela. Aceptar, rechazar y desvincular (que crean y borran la asociación) están
  * en {@link TechnicianMembershipService} (GC-524).
+ * <p>Esta clase solo crea, lista y cancela. Aceptar, rechazar y desvincular (que crean y borran la asociación) son de
+ * GC-524.
  */
 @Service
 public class CompanyInvitationService {
